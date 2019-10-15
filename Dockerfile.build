@@ -1,0 +1,19 @@
+FROM golang:1.13-alpine
+
+# This is an example alpine build image for a golang project that depends on a
+# few packages that are not in the vanilla golang image.
+
+# If you use Makefiles, need to install make. Cross compilation and publishing
+# could use the other packages here.
+
+RUN apk --no-cache add \
+    make \
+    gcc \
+    musl-dev \
+    zip
+
+# Jenkins will execute from WORKDIR so make sure WORKDIR matches where you load
+# in the source code
+
+WORKDIR /src
+ADD . /src
