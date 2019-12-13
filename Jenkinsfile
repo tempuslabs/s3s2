@@ -36,7 +36,7 @@ pipeline {
                 sh script: 'curl --fail --user "${NEXUS_CREDS}" --upload-file ./linux/s3s2-linux-amd64 ${NEXUS_PATH}/${S3S2_VERSION}/s3s2-linux-amd64', label: "Publishing Linux build"
                 sh script: 'curl --fail --user "${NEXUS_CREDS}" --upload-file ./darwin/s3s2-darwin-amd64 ${NEXUS_PATH}/${S3S2_VERSION}/s3s2-darwin-amd64', label: "Publishing Mac build"
                 sh script: 'curl --fail --user "${NEXUS_CREDS}" --upload-file ./windows/s3s2-windows-amd64.exe ${NEXUS_PATH}/${S3S2_VERSION}/s3s2-windows-amd64.exe', label: "Publishing Windows build"
-                sh script: 'apt --no-cache update && apt install pip -y && pip --no-cache-dir install awscli'
+                sh script: 'apt update && apt install -y python-pip && pip --no-cache-dir install awscli'
                 sh script: 'aws s3 cp ./linux/s3s2-linux-amd64 s3://${PUBLIC_S3_BUCKET}/${S3S2_VERSION}/s3s2-linux-amd64', label: "Publishing Linux build to S3"
                 sh script: 'aws s3 cp ./darwin/s3s2-darwin-amd64 s3://${PUBLIC_S3_BUCKET}/${S3S2_VERSION}/s3s2-darwin-amd64', label: "Publishing Mac build to S3"
                 sh script: 'aws s3 cp ./windows/s3s2-windows-amd64.exe s3://${PUBLIC_S3_BUCKET}/${S3S2_VERSION}/s3s2-windows-amd64.exe', label: "Publishing Windows build to S3"
