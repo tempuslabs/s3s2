@@ -9,7 +9,7 @@ pipeline {
         docker {
             image 'golang'
             registryUrl "https://index.docker.io/v2/"
-            args '--privileged'
+            args '--user root'
         }
     }
     stages {
