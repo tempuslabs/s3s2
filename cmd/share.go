@@ -272,6 +272,20 @@ func buildShareOptions(cmd *cobra.Command) options.Options {
 
 	return options
 }
+
+// First pass of pipeline enum validation - is used to ensure that a downstream lambda will know what path conventions to expect
+func validatePrefix(prefix string) {
+    valid_prefixes := []string{"clinical", "documents", "onbase", "epicblob", "clinicaldata",}
+
+    for _, valid_prefix := range valid_prefixes {
+        if strings.Contains(strings.ToLower(prefix), valid_prefix) {
+            return
+        }
+    }
+    panic(fmt.Sprintf("Prefix command line argument must contain one of '%s' to abide by our lambda trigger!", valid_prefixes))
+
+}
+
 // Any assertions that need to be made regarding input arguments
 func checkShareOptions(options options.Options) {
     log.Debug("Checking input arguments...")
@@ -296,9 +310,7 @@ func checkShareOptions(options options.Options) {
         panic("Input directory cannot be root!")
     }
 
-	if !strings.Contains(strings.ToLower(options.Prefix), "clinical") && !strings.Contains(strings.ToLower(options.Prefix), "documents") {
-	    panic("Prefix command line argument must contain 'clinical' or 'documents' to abide by our lambda trigger!")
-	}
+    validatePrefix(options.Prefix)
 }
 
 func init() {
