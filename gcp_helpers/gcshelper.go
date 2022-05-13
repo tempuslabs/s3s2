@@ -93,7 +93,7 @@ func DownloadFile(bucket string, org string, aws_key string, target_path string)
 	rc, err := client.Bucket(bucket).Object(final_key).NewReader(ctx)
 	utils.PanicIfError("Unable to get object - ", err)
 
-	log.Infof("Downloading from key '%s' to file '%s'", final_key, target_path)
+	log.Debugf("Downloading from key '%s' to file '%s'", final_key, target_path)
 
 	data, err := ioutil.ReadAll(rc)
 	utils.PanicIfError("Unable to download file at ioutil.ReadAll - ", err)

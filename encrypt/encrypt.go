@@ -203,7 +203,7 @@ func EncryptFile(pubKey *packet.PublicKey, InputFn string, OutputFn string, Opts
 }
 
 func DecryptFile(_pubkey *packet.PublicKey, _privkey *packet.PrivateKey, InputFn string, OutputFn string, opts options.Options) {
-    log.Infof("Decrypting file '%s' to '%s'", InputFn, OutputFn)
+    log.Debugf("Decrypting file '%s' to '%s'", InputFn, OutputFn)
 
 	in, err := os.Open(InputFn)
 	if err != nil {
