@@ -26,7 +26,7 @@ func UploadFile(sess *session.Session, org string, aws_key string, local_path st
         file, err := os.Open(local_path)
         utils.PanicIfError("Failed to open file for upload - ", err)
 
-        final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(org, aws_key)))
+        final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(strings.ToUpper(org), aws_key)))
         log.Debugf("Uploading file '%s' to aws key '%s'", local_path, final_key)
 
         for {
@@ -76,7 +76,7 @@ func UploadLambdaTrigger(sess *session.Session, org string, folder string, opts 
 
         file_name := "._lambda_trigger"
 
-        final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(org, folder, file_name)))
+        final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(strings.ToUpper(org), folder, file_name)))
         log.Debugf("Uploading file '%s' to aws key '%s'", file_name, final_key)
 
         if opts.AwsKey != "" {
@@ -113,7 +113,7 @@ func DownloadFile(sess *session.Session, bucket string, org string, aws_key stri
         file, err := os.Create(target_path)
         utils.PanicIfError("Unable to open file - ", err)
 
-        final_key := filepath.Join(org, aws_key)
+        final_key := filepath.Join(strings.ToUpper(org), aws_key)
 
         log.Infof("Downloading from key '%s' to file '%s'", final_key, target_path)
 
