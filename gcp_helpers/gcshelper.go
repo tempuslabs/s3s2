@@ -7,6 +7,7 @@ import (
     "path/filepath"
 	"io"
 	"io/ioutil"
+	"strings"
 	"google.golang.org/api/option"
 	log "github.com/sirupsen/logrus"
 	options "github.com/tempuslabs/s3s2/options"
@@ -33,7 +34,7 @@ func UploadFile(org string, aws_key string, local_path string, opts options.Opti
 
     utils.PanicIfError("Failed to open file for upload - ", err)
 
-    final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(org, aws_key)))
+    final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(strings.ToUpper(org), aws_key)))
     log.Debugf("Uploading file '%s' to aws key '%s'", local_path, final_key)
 
    
@@ -67,7 +68,7 @@ func UploadLambdaTrigger(org string, folder string, opts options.Options) error 
 	file, err := os.Create(file_name)
 	defer file.Close()
 	bucket := opts.Bucket
-    final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(org, folder, file_name)))
+    final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(strings.ToUpper(org), folder, file_name)))
     log.Debugf("Uploading file '%s' to bucket '%s' aws key '%s'", file_name, bucket, final_key)
 	wc := client.Bucket(bucket).Object(final_key).NewWriter(ctx)
 	defer wc.Close()
@@ -88,7 +89,7 @@ func DownloadFile(bucket string, org string, aws_key string, target_path string)
 	client, err := storage.NewClient(ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
 	utils.PanicIfError("Unable to get context client - ", err)
 
-	final_key := filepath.Join(org, aws_key)
+	final_key := filepath.Join(strings.ToUpper(org), aws_key)
 
 	rc, err := client.Bucket(bucket).Object(final_key).NewReader(ctx)
 	utils.PanicIfError("Unable to get object - ", err)
