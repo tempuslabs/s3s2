@@ -300,7 +300,7 @@ func checkShareOptions(options options.Options) {
         panic("Input directory cannot be root!")
     }
 
-	if !strings.Contains(strings.ToLower(options.Prefix), "clinical") && !strings.Contains(strings.ToLower(options.Prefix), "documents") && !strings.Contains(strings.ToLower(options.Prefix), "imaging"){
+	if !strings.Contains(strings.ToLower(options.Prefix), "clinical") && !strings.Contains(strings.ToLower(options.Prefix), "documents") && !strings.Contains(strings.ToLower(options.Prefix), "imaging") && !strings.Contains(strings.ToLower(options.Prefix), "molecular"){
 	    panic("Prefix command line argument must contain 'clinical' or 'documents' to abide by our lambda trigger!")
 	}
 }
