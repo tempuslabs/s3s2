@@ -132,7 +132,7 @@ func GetAwsSession(opts options.Options) *session.Session {
 
     // intended on share when ran on partner server using credential files
     if opts.AwsProfile != "" {
-        log.Infof("Using AWS Profile '%s'", opts.AwsProfile)
+        log.Debugf("Using AWS Profile '%s'", opts.AwsProfile)
         sess = session.Must(session.NewSessionWithOptions(session.Options{
         Profile: opts.AwsProfile,
         Config: getAwsConfig(opts),

@@ -115,7 +115,7 @@ func DownloadFile(sess *session.Session, bucket string, org string, aws_key stri
 
         final_key := filepath.Join(strings.ToUpper(org), aws_key)
 
-        log.Infof("Downloading from key '%s' to file '%s'", final_key, target_path)
+        log.Debugf("Downloading from key '%s' to file '%s'", final_key, target_path)
 
         downloader := s3manager.NewDownloader(sess)
 
