@@ -189,6 +189,11 @@ func processFile(sess *session.Session, _pubkey *packet.PublicKey, aws_folder st
 	zip.ZipFile(fn_source, fn_zip, work_folder)
 	encrypt.EncryptFile(_pubkey, fn_zip, fn_encrypt, opts)
 
+    	// Refresh aws session before uploading every file when not running by partner
+    	if opts.AwsProfile == "" {
+        	sess = utils.GetAwsSession(opts)
+    	}
+
 	err := aws_helpers.UploadFile(sess, opts.Org, fn_aws_key, fn_encrypt, opts)
 
 	if err != nil {
