@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	cloud.google.com/go/storage v1.18.2
+	github.com/avast/retry-go/v4 v4.1.0 // indirect
 	github.com/aws/aws-sdk-go v1.23.6
 	github.com/c-bata/go-prompt v0.2.3
 	github.com/json-iterator/go v1.1.9

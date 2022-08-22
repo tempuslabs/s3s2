@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/avast/retry-go/v4"
     "golang.org/x/crypto/openpgp/packet"
 
     session "github.com/aws/aws-sdk-go/aws/session"
@@ -189,12 +190,23 @@ func processFile(sess *session.Session, _pubkey *packet.PublicKey, aws_folder st
 	zip.ZipFile(fn_source, fn_zip, work_folder)
 	encrypt.EncryptFile(_pubkey, fn_zip, fn_encrypt, opts)
 
-    	// Refresh aws session before uploading every file when not running by partner
+        // Refresh aws session before uploading every file when not running by partner
     	if opts.AwsProfile == "" {
         	sess = utils.GetAwsSession(opts)
     	}
 
-	err := aws_helpers.UploadFile(sess, opts.Org, fn_aws_key, fn_encrypt, opts)
+        err := retry.Do(
+            func() error {
+                err := aws_helpers.UploadFile(sess, opts.Org, fn_aws_key, fn_encrypt, opts)
+                if err != nil {
+                    time.Sleep(10 * time.Second)
+                    sess = utils.GetAwsSession(opts)
+                    return err
+                }
+                return nil
+            },
+            retry.Attempts(3),
+        )
 
 	if err != nil {
 	    utils.PanicIfError("Error uploading file - ", err)
