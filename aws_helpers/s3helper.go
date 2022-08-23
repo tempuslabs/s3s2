@@ -56,12 +56,12 @@ func UploadFile(sess *session.Session, org string, aws_key string, local_path st
                 })
 
                 if err != nil {
-                    utils.PanicIfError("Failed to upload file: ", err)
+                    log.Debugf("Failed to upload file: ", err)
                 } else {
                     log.Debugf("File '%s' uploaded to: '%s'", file.Name(), result.Location)
                     file.Close()
-                    return err
                 }
+                return err
             }
         }
     }
