@@ -4,6 +4,7 @@ package aws_helpers
 import (
 	"os"
 	"strings"
+	"time"
     "path/filepath"
 	log "github.com/sirupsen/logrus"
 	session "github.com/aws/aws-sdk-go/aws/session"
@@ -13,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/avast/retry-go/v4"
 )
 
 // Given file, open contents and send to S3
@@ -20,7 +22,9 @@ func UploadFile(sess *session.Session, org string, aws_key string, local_path st
     if opts.IsGCS == true {
         return gcp_helpers.UploadFile(org, aws_key, local_path, opts)
     } else {
-    
+
+        // Fetch session everytime before uplading to make sure we have latest creds from pod
+        sess = utils.GetAwsSession(opts)
         uploader := s3manager.NewUploader(sess)
 
         file, err := os.Open(local_path)
@@ -49,18 +53,27 @@ func UploadFile(sess *session.Session, org string, aws_key string, local_path st
                 }
 
             } else {
-                result, err := uploader.Upload(&s3manager.UploadInput{
-                    Bucket: aws.String(opts.Bucket),
-                    Key:    aws.String(final_key),
-                    Body:   file,
-                })
-
-                if err != nil {
-                    log.Debugf("Failed to upload file: ", err)
-                } else {
-                    log.Debugf("File '%s' uploaded to: '%s'", file.Name(), result.Location)
-                    file.Close()
-                }
+                // The pod will have empty creds while refreshing the session, in that case we will retry after 10 secs
+                err := retry.Do(
+                    func() error {
+                        result, err := uploader.Upload(&s3manager.UploadInput{
+                            Bucket: aws.String(opts.Bucket),
+                            Key:    aws.String(final_key),
+                            Body:   file,
+                        })
+                        if err != nil {
+                            time.Sleep(10 * time.Second)
+                            sess = utils.GetAwsSession(opts)
+                            uploader = s3manager.NewUploader(sess)
+                            return err
+                        }
+                        log.Debugf("File '%s' uploaded to: '%s'", file.Name(), result.Location)
+                        file.Close()
+                        return nil
+                        },
+                        retry.Attempts(3),
+                )
+                utils.PanicIfError("Failed to upload file: ", err)
                 return err
             }
         }
@@ -72,6 +85,8 @@ func UploadLambdaTrigger(sess *session.Session, org string, folder string, opts 
     if opts.IsGCS == true {
         return gcp_helpers.UploadLambdaTrigger(org, folder, opts)
     } else {
+        // Fetch session everytime before uplading to make sure we have latest creds from pod
+        sess = utils.GetAwsSession(opts)
         uploader := s3manager.NewUploader(sess)
 
         file_name := "._lambda_trigger"
@@ -92,13 +107,26 @@ func UploadLambdaTrigger(sess *session.Session, org string, folder string, opts 
             return err
 
         } else {
-            result, err := uploader.Upload(&s3manager.UploadInput{
-                Bucket: aws.String(opts.Bucket),
-                Key:    aws.String(final_key),
-                Body:   strings.NewReader(""),
-            })
+            // The pod will have empty creds while refreshing the session, in that case we will retry after 10 secs
+            err := retry.Do(
+                func() error {
+                    result, err := uploader.Upload(&s3manager.UploadInput{
+                        Bucket: aws.String(opts.Bucket),
+                        Key:    aws.String(final_key),
+                        Body:   strings.NewReader(""),
+                    })
+                    if err != nil {
+                        time.Sleep(10 * time.Second)
+                        sess = utils.GetAwsSession(opts)
+                        uploader = s3manager.NewUploader(sess)
+                        return err
+                    }
+                    log.Debugf("File '%s' uploaded to: '%s'", file_name, result.Location)
+                    return nil
+                    },
+                    retry.Attempts(3),
+            )
             utils.PanicIfError("Failed to upload file: ", err)
-            log.Debugf("File '%s' uploaded to: '%s'", file_name, result.Location)
             return err
         }
     }
