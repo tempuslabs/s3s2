@@ -1,6 +1,6 @@
 # s3s2
 
-Safe and secure (s2) file sharing with S3 (Amazon's Simple sharing service).
+Safe and secure (s2) file sharing with S3 (Amazon's Simple Storage Service).
 
 Simple Secure S3 Share - Share files securely with S3.
 
