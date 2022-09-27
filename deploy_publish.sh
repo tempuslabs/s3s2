@@ -16,7 +16,7 @@ curl --fail --user "${NEXUS_CREDS}" --upload-file ./windows/s3s2-windows-amd64.e
 curl --fail --user "${NEXUS_CREDS}" --upload-file ./so/s3s2.so ${NEXUS_PATH}/${GIT_COMMIT}/s3s2.so
 
 # publish to s3
-apt update && apt install -y python3-pip && pip --no-cache-dir install awscli
+apt -qq update && apt -qq install -y python3-pip && pip --no-cache-dir install awscli
 aws s3api put-object --bucket ${PUBLIC_S3_BUCKET} --key ${GIT_COMMIT}/s3s2-linux-amd64 --body ./linux/s3s2-linux-amd64 --acl public-read
 aws s3api put-object --bucket ${PUBLIC_S3_BUCKET} --key ${GIT_COMMIT}/s3s2-darwin-amd64 --body ./darwin/s3s2-darwin-amd64 --acl public-read
 aws s3api put-object --bucket ${PUBLIC_S3_BUCKET} --key ${GIT_COMMIT}/s3s2-windows-amd64.exe --body ./windows/s3s2-windows-amd64.exe --acl public-read
