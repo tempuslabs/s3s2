@@ -1,10 +1,10 @@
 SHELL := /bin/bash
 
 test:
-       ./deploy_tests.sh
+	./deploy_tests.sh
 
 build:
-       ./deploy_build.sh
+	./deploy_build.sh
 
 publish: test build
-       ./deploy_publish.sh
+	./deploy_publish.sh
