@@ -12,9 +12,6 @@ GIT_COMMIT=$(git rev-parse HEAD)
 
 echo "Publishing S3S2 Version: ${GIT_COMMIT}"
 
-# TODO: first populate the AWS secrets and disable the jenkins job, then remove this "exit 0" to attempt publish
-exit 0
-
 # publish to nexus
 curl --fail --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file ./linux/s3s2-linux-amd64 "${NEXUS_PATH}/${GIT_COMMIT}/s3s2-linux-amd64"
 curl --fail --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file ./darwin/s3s2-darwin-amd64 "${NEXUS_PATH}/${GIT_COMMIT}/s3s2-darwin-amd64"
