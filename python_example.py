@@ -20,20 +20,26 @@ decrypt.argtypes = [
     GoString,
     GoString,
     ctypes.c_ubyte,
-    ctypes.c_longlong
+    ctypes.c_longlong,
+    GoString,
+
 ]
 decrypt.restype = ctypes.c_int
+"""
+tl-alp-cc-provider-secured-batch-onramp/AON/clinical_ClinicalData_s3s2_20221118034423_0/s3s2_manifest.json
+"""
 
-bucket = 'alp-cc-provider-secured-batch-onramp'
-file = 'clinical__s3s2_20211115195434_0/s3s2_manifest.json'
+bucket = 'tl-alp-cc-provider-secured-batch-onramp'
+file = 'clinical_ClinicalData_s3s2_20221118034423_0/s3s2_manifest.json'
 directory = "~/Desktop2/s3s2-save"
-org = "ilcc"
+org = "aon"
 region = "us-west-2"
 awsProfile = "tempusdevops-nishant-sharma"
 pubKey = ""
 privKey = ""
-ssmPubKey = "/staging/n_composer/file_gateway/PRIVATE_KEY_S3S2"
-ssmPrivKey = "/staging/n_composer/file_gateway/PUBLIC_KEY_S3S2"
+ssmPubKey = "/staging/n_composer/dag/sftp_to_s3_/PRIVATE_KEY_S3S2"
+ssmPrivKey = "/staging/n_composer/dag/sftp_to_s3_/PUBLIC_KEY_S3S2"
+filePatterns = '*/SalesDB2014_Split2*'
 
 try:
 
@@ -49,7 +55,8 @@ try:
         GoString(ssmPubKey.encode('utf-8'), len(ssmPubKey)),
         GoString(ssmPrivKey.encode('utf-8'), len(ssmPrivKey)),
         True,
-        10
+        10,
+        GoString(filePatterns.encode('utf-8'), len(filePatterns))
     )
 except Exception as ex:
     raise ex
