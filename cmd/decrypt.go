@@ -1,13 +1,14 @@
-
 package cmd
 
 import (
-	"os"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
-	"path/filepath"
+
 	"golang.org/x/crypto/openpgp/packet"
 
 	"github.com/spf13/cobra"
@@ -17,16 +18,16 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-    // local
-	zip "github.com/tempuslabs/s3s2/zip"
+	// local
+	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
 	encrypt "github.com/tempuslabs/s3s2/encrypt"
+	file "github.com/tempuslabs/s3s2/file"
 	manifest "github.com/tempuslabs/s3s2/manifest"
 	options "github.com/tempuslabs/s3s2/options"
-	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
 	utils "github.com/tempuslabs/s3s2/utils"
-	file "github.com/tempuslabs/s3s2/file"
+	wc_helpers "github.com/tempuslabs/s3s2/wc_helpers"
+	zip "github.com/tempuslabs/s3s2/zip"
 )
-
 
 var opts options.Options
 
@@ -44,6 +45,7 @@ var decryptCmd = &cobra.Command{
 		viper.BindPFlag("aws-profile", cmd.Flags().Lookup("aws-profile"))
 		viper.BindPFlag("ssm-public-key", cmd.Flags().Lookup("ssm-public-key"))
 		viper.BindPFlag("is-gcs", cmd.Flags().Lookup("is-gcs"))
+		viper.BindPFlag("filter-files", cmd.Flags().Lookup("filter-files"))
 		cmd.MarkFlagRequired("directory")
 		cmd.MarkFlagRequired("region")
 	},
@@ -52,19 +54,19 @@ var decryptCmd = &cobra.Command{
 		opts := buildDecryptOptions()
 		checkDecryptOptions(opts)
 
-        // top level clients
-        sess := utils.GetAwsSession(opts)
-	    _pubKey := encrypt.GetPubKey(sess, opts)
-	    _privKey := encrypt.GetPrivKey(sess, opts)
+		// top level clients
+		sess := utils.GetAwsSession(opts)
+		_pubKey := encrypt.GetPubKey(sess, opts)
+		_privKey := encrypt.GetPrivKey(sess, opts)
 
-	    os.MkdirAll(opts.Directory, os.ModePerm)
+		os.MkdirAll(opts.Directory, os.ModePerm)
 
-	    // if downloading via manifest
+		// if downloading via manifest
 		if strings.HasSuffix(opts.File, "manifest.json") {
 
-		    log.Info("Detected manifest file...")
+			log.Info("Detected manifest file...")
 
-		    target_manifest_path := filepath.Join(opts.Directory, filepath.Base(opts.File))
+			target_manifest_path := filepath.Join(opts.Directory, filepath.Base(opts.File))
 			fn, err := aws_helpers.DownloadFile(sess, opts.Bucket, opts.Org, opts.File, target_manifest_path, opts)
 			utils.PanicIfError("Unable to download file - ", err)
 
@@ -72,28 +74,47 @@ var decryptCmd = &cobra.Command{
 			batch_folder := m.Folder
 			file_structs := m.Files
 
-            var wg sync.WaitGroup
-            sem := make(chan int, opts.Parallelism)
+			if len(opts.FilterFiles) >= 1 {
+				patterns := strings.Split(opts.FilterFiles, ",")
+				var file_filtered []file.File
 
-            for _, fs := range file_structs {
-                wg.Add(1)
-                go func(wg *sync.WaitGroup, sess *session.Session, _pubkey *packet.PublicKey, _privKey *packet.PrivateKey, folder string, fs file.File, opts options.Options) {
-                    sem <- 1
-                    defer func() { <-sem }()
-                    defer wg.Done()
-                    // if block is for cases where AWS session expires, so we re-create session and attempt file again
-                    if decryptFile(sess, _pubKey, _privKey, m, fs, opts) != nil {
-                        sess = utils.GetAwsSession(opts)
-                        err := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
-                        if err != nil {}
-                            log.Warn("Error during decrypt-file session expiration if block!")
-                            log.Errorf("Error: '%v'", err)
-                            panic(err)
-                    }
-                }(&wg, sess, _pubKey, _privKey, batch_folder, fs, opts)
-            }
-            wg.Wait()
-        }
+				for _, f_pattern := range patterns {
+					for _, fs := range file_structs {
+						reg_pattern := wc_helpers.WildCardToRegex(f_pattern)
+						r, _ := regexp.Compile(reg_pattern)
+						if r.MatchString(fs.Name) {
+							log.Infof("Matched %v with %s", fs, reg_pattern)
+							file_filtered = append(file_filtered, fs)
+						}
+					}
+
+				}
+				file_structs = file_filtered
+			}
+
+			var wg sync.WaitGroup
+			sem := make(chan int, opts.Parallelism)
+
+			for _, fs := range file_structs {
+				wg.Add(1)
+				go func(wg *sync.WaitGroup, sess *session.Session, _pubkey *packet.PublicKey, _privKey *packet.PrivateKey, folder string, fs file.File, opts options.Options) {
+					sem <- 1
+					defer func() { <-sem }()
+					defer wg.Done()
+					// if block is for cases where AWS session expires, so we re-create session and attempt file again
+					if decryptFile(sess, _pubKey, _privKey, m, fs, opts) != nil {
+						sess = utils.GetAwsSession(opts)
+						err := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
+						if err != nil {
+						}
+						log.Warn("Error during decrypt-file session expiration if block!")
+						log.Errorf("Error: '%v'", err)
+						panic(err)
+					}
+				}(&wg, sess, _pubKey, _privKey, batch_folder, fs, opts)
+			}
+			wg.Wait()
+		}
 	},
 }
 
@@ -116,10 +137,10 @@ func decryptFile(sess *session.Session, _pubkey *packet.PublicKey, _privkey *pac
 	_, err := aws_helpers.DownloadFile(sess, opts.Bucket, m.Organization, aws_key, target_path, opts)
 	utils.PanicIfError("Unable to download file - ", err)
 
-    encrypt.DecryptFile(_pubkey, _privkey, target_path, fn_zip, opts)
+	encrypt.DecryptFile(_pubkey, _privkey, target_path, fn_zip, opts)
 	zip.UnZipFile(fn_zip, fn_decrypt, opts.Directory)
 
-    utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", fs.Name) + "%f seconds")
+	utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", fs.Name)+"%f seconds")
 
 	return err
 }
@@ -142,6 +163,7 @@ func buildDecryptOptions() options.Options {
 	ssmPubKey := viper.GetString("ssm-public-key")
 	isGCS := viper.GetBool("is-gcs")
 	parallelism := viper.GetInt("parallelism")
+	filterFiles := viper.GetString("filter-files")
 
 	options := options.Options{
 		Bucket:      bucket,
@@ -151,11 +173,12 @@ func buildDecryptOptions() options.Options {
 		Region:      region,
 		PrivKey:     privKey,
 		PubKey:      pubKey,
-		IsGCS: 		 isGCS,
+		IsGCS:       isGCS,
 		SSMPrivKey:  ssmPrivKey,
 		SSMPubKey:   ssmPubKey,
 		AwsProfile:  awsProfile,
 		Parallelism: parallelism,
+		FilterFiles: filterFiles,
 	}
 
 	debug := viper.GetBool("debug")
@@ -182,10 +205,10 @@ func checkDecryptOptions(options options.Options) {
 		log.Warn("Need to supply a region for the S3 bucket.")
 		log.Panic("Insufficient information to perform decryption.")
 	} else if options.PubKey == "" && options.SSMPubKey == "" {
-	    log.Warn("Need to supply a public encryption key parameter.")
+		log.Warn("Need to supply a public encryption key parameter.")
 		log.Panic("Insufficient information to perform decryption.")
 	} else if options.PrivKey == "" && options.SSMPrivKey == "" {
-	    log.Warn("Need to supply a private encryption key parameter.")
+		log.Warn("Need to supply a private encryption key parameter.")
 		log.Panic("Insufficient information to perform decryption.")
 	}
 }
@@ -193,7 +216,7 @@ func checkDecryptOptions(options options.Options) {
 func init() {
 	rootCmd.AddCommand(decryptCmd)
 
-    // core flags
+	// core flags
 	decryptCmd.PersistentFlags().String("file", "", "The path to the file to decrypt.  Can be manifest or single file.")
 	decryptCmd.MarkFlagRequired("file")
 	decryptCmd.PersistentFlags().String("directory", "", "The destination directory to decrypt and unzip.")
@@ -201,16 +224,17 @@ func init() {
 	decryptCmd.PersistentFlags().String("region", "", "The AWS region of the target bucket.")
 	decryptCmd.MarkFlagRequired("region")
 
-    // technical configuration
+	// technical configuration
 	decryptCmd.PersistentFlags().Int("parallelism", 10, "The maximum number of files to download and decrypt at a time.")
 	decryptCmd.PersistentFlags().String("aws-profile", "", "AWS profile to use when establishing sessions with AWS's SDK.")
 
-    // ssm keys
+	// ssm keys
 	decryptCmd.PersistentFlags().String("my-private-key", "", "The receiver's private key.  A local file path.")
 	decryptCmd.PersistentFlags().String("my-public-key", "", "The receiver's public key.  A local file path.")
-    decryptCmd.PersistentFlags().String("ssm-private-key", "", "The receiver's private key.  A parameter name in SSM.")
-    decryptCmd.PersistentFlags().String("ssm-public-key", "", "The receiver's public key.  A parameter name in SSM.")
+	decryptCmd.PersistentFlags().String("ssm-private-key", "", "The receiver's private key.  A parameter name in SSM.")
+	decryptCmd.PersistentFlags().String("ssm-public-key", "", "The receiver's public key.  A parameter name in SSM.")
 	decryptCmd.PersistentFlags().Bool("is-gcs", false, "If the interaction is with gcs.")
+	decryptCmd.PersistentFlags().String("filter-files", "", "list of wildcard files to be only filtered and decrypted")
 
 	viper.BindPFlag("file", decryptCmd.PersistentFlags().Lookup("file"))
 	viper.BindPFlag("directory", decryptCmd.PersistentFlags().Lookup("directory"))
@@ -218,9 +242,10 @@ func init() {
 	viper.BindPFlag("aws-profile", decryptCmd.PersistentFlags().Lookup("aws-profile"))
 	viper.BindPFlag("my-private-key", decryptCmd.PersistentFlags().Lookup("my-private-key"))
 	viper.BindPFlag("my-public-key", decryptCmd.PersistentFlags().Lookup("my-public-key"))
-    viper.BindPFlag("ssm-private-key", decryptCmd.PersistentFlags().Lookup("ssm-private-key"))
-    viper.BindPFlag("ssm-public-key", decryptCmd.PersistentFlags().Lookup("ssm-public-key"))
+	viper.BindPFlag("ssm-private-key", decryptCmd.PersistentFlags().Lookup("ssm-private-key"))
+	viper.BindPFlag("ssm-public-key", decryptCmd.PersistentFlags().Lookup("ssm-public-key"))
 	viper.BindPFlag("is-gcs", decryptCmd.PersistentFlags().Lookup("is-gcs"))
+	viper.BindPFlag("filter-files", decryptCmd.PersistentFlags().Lookup("filter-files"))
 
 	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetFormatter(&log.TextFormatter{})

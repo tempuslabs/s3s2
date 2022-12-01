@@ -29,4 +29,5 @@ type Options struct {
 	File        string `json:"file"`
 	PrivKey     string `json:"privkey"`
 	SSMPrivKey  string `json:"ssmprivkey"`
+	FilterFiles string `json:"fileterFiles"`
 }

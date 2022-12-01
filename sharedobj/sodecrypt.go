@@ -1,33 +1,35 @@
-
 package main
 
 import (
-	"os"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
-	"path/filepath"
+
 	"golang.org/x/crypto/openpgp/packet"
 
 	session "github.com/aws/aws-sdk-go/aws/session"
 
 	log "github.com/sirupsen/logrus"
 
-    // local
-	zip "github.com/tempuslabs/s3s2/zip"
+	// local
+	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
 	encrypt "github.com/tempuslabs/s3s2/encrypt"
+	file "github.com/tempuslabs/s3s2/file"
 	manifest "github.com/tempuslabs/s3s2/manifest"
 	options "github.com/tempuslabs/s3s2/options"
-	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
 	utils "github.com/tempuslabs/s3s2/utils"
-	file "github.com/tempuslabs/s3s2/file"
+	wc_helpers "github.com/tempuslabs/s3s2/wc_helpers"
+	zip "github.com/tempuslabs/s3s2/zip"
 )
 import "C"
 
 var opts options.Options
 
- //export Decrypt
+//export Decrypt
 func Decrypt(
 	bucket string,
 	f string,
@@ -40,7 +42,8 @@ func Decrypt(
 	ssmPrivKey string,
 	ssmPubKey string,
 	isGCS bool,
-	parallelism int) int {
+	parallelism int,
+	filterFiles string) int {
 
 	opts := options.Options{
 		Bucket:      bucket,
@@ -50,11 +53,12 @@ func Decrypt(
 		Region:      region,
 		PrivKey:     privKey,
 		PubKey:      pubKey,
-		IsGCS: 		 isGCS,
+		IsGCS:       isGCS,
 		SSMPrivKey:  ssmPrivKey,
 		SSMPubKey:   ssmPubKey,
 		AwsProfile:  awsProfile,
 		Parallelism: parallelism,
+		FilterFiles: filterFiles,
 	}
 	checkDecryptOptions(opts)
 
@@ -78,9 +82,26 @@ func Decrypt(
 		batch_folder := m.Folder
 		file_structs := m.Files
 
+		if len(opts.FilterFiles) >= 1 {
+			patterns := strings.Split(opts.FilterFiles, ",")
+			var file_filtered []file.File
+
+			for _, f_pattern := range patterns {
+				for _, fs := range file_structs {
+					reg_pattern := wc_helpers.WildCardToRegex(f_pattern)
+					r, _ := regexp.Compile(reg_pattern)
+					if r.MatchString(fs.Name) {
+						log.Infof("Matched %v with %s" , fs, reg_pattern)
+						file_filtered = append(file_filtered, fs)
+					}
+				}
+
+			}
+			file_structs = file_filtered
+		}
+
 		var wg sync.WaitGroup
 		sem := make(chan int, opts.Parallelism)
-
 		for _, fs := range file_structs {
 			wg.Add(1)
 			go func(wg *sync.WaitGroup, sess *session.Session, _pubkey *packet.PublicKey, _privKey *packet.PrivateKey, folder string, fs file.File, opts options.Options) {
@@ -91,10 +112,11 @@ func Decrypt(
 				if decryptFile(sess, _pubKey, _privKey, m, fs, opts) != nil {
 					sess = utils.GetAwsSession(opts)
 					err := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
-					if err != nil {}
-						log.Warn("Error during decrypt-file session expiration if block!")
-						log.Errorf("Error: '%v'", err)
-						panic(err)
+					if err != nil {
+					}
+					log.Warn("Error during decrypt-file session expiration if block!")
+					log.Errorf("Error: '%v'", err)
+					panic(err)
 				}
 			}(&wg, sess, _pubKey, _privKey, batch_folder, fs, opts)
 		}
@@ -122,10 +144,10 @@ func decryptFile(sess *session.Session, _pubkey *packet.PublicKey, _privkey *pac
 	_, err := aws_helpers.DownloadFile(sess, opts.Bucket, m.Organization, aws_key, target_path, opts)
 	utils.PanicIfError("Main download failed - ", err)
 
-    encrypt.DecryptFile(_pubkey, _privkey, target_path, fn_zip, opts)
+	encrypt.DecryptFile(_pubkey, _privkey, target_path, fn_zip, opts)
 	zip.UnZipFile(fn_zip, fn_decrypt, opts.Directory)
 
-    utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", fs.Name) + "%f seconds")
+	utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", fs.Name)+"%f seconds")
 
 	return err
 }
@@ -144,10 +166,10 @@ func checkDecryptOptions(options options.Options) {
 		log.Warn("Need to supply a region for the S3 bucket.")
 		log.Panic("Insufficient information to perform decryption.")
 	} else if options.PubKey == "" && options.SSMPubKey == "" {
-	    log.Warn("Need to supply a public encryption key parameter.")
+		log.Warn("Need to supply a public encryption key parameter.")
 		log.Panic("Insufficient information to perform decryption.")
 	} else if options.PrivKey == "" && options.SSMPrivKey == "" {
-	    log.Warn("Need to supply a private encryption key parameter.")
+		log.Warn("Need to supply a private encryption key parameter.")
 		log.Panic("Insufficient information to perform decryption.")
 	}
 }
