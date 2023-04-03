@@ -1,32 +1,30 @@
-
 package cmd
 
 import (
-	"sync"
-	"time"
 	"fmt"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-    "golang.org/x/crypto/openpgp/packet"
+	"golang.org/x/crypto/openpgp/packet"
 
-    session "github.com/aws/aws-sdk-go/aws/session"
+	session "github.com/aws/aws-sdk-go/aws/session"
 
-    log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
-    // local
-	zip "github.com/tempuslabs/s3s2/zip"
+	// local
+	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
 	encrypt "github.com/tempuslabs/s3s2/encrypt"
+	file "github.com/tempuslabs/s3s2/file"
 	manifest "github.com/tempuslabs/s3s2/manifest"
 	options "github.com/tempuslabs/s3s2/options"
-	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
-	file "github.com/tempuslabs/s3s2/file"
 	utils "github.com/tempuslabs/s3s2/utils"
+	zip "github.com/tempuslabs/s3s2/zip"
 )
-
 
 // shareCmd represents the share command
 var shareCmd = &cobra.Command{
@@ -45,7 +43,7 @@ var shareCmd = &cobra.Command{
 		viper.BindPFlag("aws-profile", cmd.Flags().Lookup("aws-profile"))
 		viper.BindPFlag("ssm-public-key", cmd.Flags().Lookup("ssm-public-key"))
 		viper.BindPFlag("is-gcs", cmd.Flags().Lookup("is-gcs"))
-		cmd.MarkFlagRequired("directory")
+		viper.BindPFlag("share-from-list", cmd.Flags().Lookup("share-from-list"))
 		cmd.MarkFlagRequired("org")
 		cmd.MarkFlagRequired("region")
 	},
@@ -54,11 +52,22 @@ var shareCmd = &cobra.Command{
 		opts := buildShareOptions(cmd)
 		checkShareOptions(opts)
 
-		start := time.Now()
-		fnuuid := start.Format("20060102150405") // golang uses numeric constants for timestamp formatting
+        start := time.Now()
+        fnuuid := start.Format("20060102150405") // golang uses numeric constants for timestamp formatting
+        date_folder := start.Format("20060102")  // required for sharing from list
 
-		file_structs, file_structs_metadata, err := file.GetFileStructsFromDir(opts.Directory, opts)
-		utils.PanicIfError("Error reading directory", err)
+        var file_structs []file.File
+        var file_structs_metadata []file.File
+        var err error
+        if opts.Directory != "" {
+            file_structs, file_structs_metadata, err = file.GetFileStructsFromDir(opts.Directory, opts)
+            utils.PanicIfError("Error reading directory", err)
+        } else if opts.ShareFromList != "" {
+            file_structs, file_structs_metadata, err = file.GetFileStructsFromCsv(opts.ShareFromList, date_folder, opts)
+            utils.PanicIfError("Error reading directory", err)
+        } else {
+            panic("No parameters for sharing directory / index are defined.")
+        }
 
 		if len(file_structs) == 0 && len(file_structs_metadata) == 0 {
 		    panic("No files from input directory were read. This means the directory is empty or only contains invalid files.")
@@ -112,10 +121,14 @@ var shareCmd = &cobra.Command{
 		        batch_folder = fmt.Sprintf("%s_s3s2_%s_%d", opts.Prefix, fnuuid, current_s3_batch)
 
                 // ensure the new s3 folder also has the metadata files
-		        for _, mdf := range file_structs_metadata {
-		            processFile(sess, _pubKey, batch_folder, work_folder, mdf, opts)
-		            current_s3_folder_size += 1
-		        }
+                for _, mdf := range file_structs_metadata {
+                    if opts.Directory != "" {
+                        processFile(sess, _pubKey, batch_folder, work_folder, mdf, opts)
+                    } else {
+                        processFileInMemory(sess, _pubKey, batch_folder, work_folder, mdf, date_folder, opts)
+                    }
+                    current_s3_folder_size += 1
+                }
 
 		        all_uploaded_files_so_far = file_structs_metadata
 
@@ -129,7 +142,11 @@ var shareCmd = &cobra.Command{
                     sem <- 1
                     defer func() { <-sem }()
                     defer wg.Done()
-                    processFile(sess, _pubKey, batch_folder, work_folder, fs, opts)
+                    if opts.Directory != "" {
+                        processFile(sess, _pubKey, batch_folder, work_folder, fs, opts)
+                    } else {
+                        processFileInMemory(sess, _pubKey, batch_folder, work_folder, fs, date_folder, opts)
+                    }
                 }(&wg, sess, _pubKey, batch_folder, fs, opts)
             }
 
@@ -138,8 +155,18 @@ var shareCmd = &cobra.Command{
             current_s3_folder_size += len(chunk)
 		    all_uploaded_files_so_far = append(all_uploaded_files_so_far, chunk...)
 
+            var all_uploaded_files_in_batch []file.File
+            // If sharing from list, the filename will include the local path. This corrects the directory for the manifest
+            if opts.Directory == "" {
+                for _, fs := range all_uploaded_files_so_far {
+                    _, file_name := filepath.Split(fs.Name)
+                    all_uploaded_files_in_batch = append(all_uploaded_files_in_batch, file.File{Name: filepath.Join(date_folder, file_name)})
+                }
+            } else {
+                all_uploaded_files_in_batch = all_uploaded_files_so_far
+            }
             // upon chunk completion
-            m, err = manifest.BuildManifest(all_uploaded_files_so_far, batch_folder, opts)
+            m, err = manifest.BuildManifest(all_uploaded_files_in_batch, batch_folder, opts)
             utils.PanicIfError("Error building Manifest", err)
 
             // create manifest in top-level directory - overwrite any existing manifest to include latest chunk
@@ -189,7 +216,7 @@ func processFile(sess *session.Session, _pubkey *packet.PublicKey, aws_folder st
 	zip.ZipFile(fn_source, fn_zip, work_folder)
 	encrypt.EncryptFile(_pubkey, fn_zip, fn_encrypt, opts)
 
-        err := aws_helpers.UploadFile(sess, opts.Org, fn_aws_key, fn_encrypt, opts)
+	err := aws_helpers.UploadFile(sess, opts.Org, fn_aws_key, fn_encrypt, opts)
 
 	if err != nil {
 	    utils.PanicIfError("Error uploading file - ", err)
@@ -211,15 +238,45 @@ func processFile(sess *session.Session, _pubkey *packet.PublicKey, aws_folder st
             os.Remove(nested_dir_crypt)
         }
     }
-
 }
 
+func processFileInMemory(sess *session.Session, _pubkey *packet.PublicKey, aws_folder string, work_folder string, fs file.File, date_folder string, opts options.Options) {
+    log.Debugf("Processing file '%s'", fs.Name)
+    start := time.Now()
+
+    fn_source := fs.Name
+    _, file_name := filepath.Split(fn_source)
+    fn_aws_key := filepath.Join(aws_folder, date_folder, file_name+".zip.gpg")
+
+    fn_zip := zip.ZipFileInMemory(fn_source, date_folder)
+
+    fn_encrypted := encrypt.EncryptBuffer(_pubkey, fn_zip, opts)
+
+    err := aws_helpers.UploadBuffer(sess, opts.Org, fn_aws_key, fn_encrypted, file_name, opts)
+
+    if err != nil {
+        utils.PanicIfError("Error uploading file - ", err)
+    } else {
+        utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", file_name)+"%f seconds")
+    }
+}
 
 // buildContext sets up the ShareContext we're going to use
 // to keep track of our state while we go.
 func buildShareOptions(cmd *cobra.Command) options.Options {
 
-	directory := filepath.Clean(viper.GetString("directory"))
+    // if the directory isn't defined, don't Clean a blank string into a file path
+    directory := viper.GetString("directory")
+    if directory != "" {
+        directory = filepath.Clean(directory)
+    }
+
+    // if the index file isn't defined, don't Clean a blank string into a file path
+    shareFromList := viper.GetString("share-from-list")
+    if shareFromList != "" {
+        filepath.Clean(shareFromList)
+    }
+
 	awsKey := viper.GetString("awskey")
 	bucket := viper.GetString("bucket")
 	region := viper.GetString("region")
@@ -265,6 +322,7 @@ func buildShareOptions(cmd *cobra.Command) options.Options {
 		MetaDataFiles      : metaDataFiles,
 		LambdaTrigger      : lambdaTrigger,
 		DeleteOnCompletion : deleteOnCompletion,
+		ShareFromList      : shareFromList,
 	}
 
 	debug := viper.GetBool("debug")
@@ -292,9 +350,13 @@ func checkShareOptions(options options.Options) {
 		panic("A bucket must be provided.")
 	}
 
-	if options.Directory == "" {
-		panic("Need to supply a destination for the files to decrypt.  Should be a local path.")
-	}
+    if options.Directory == "" && options.ShareFromList == "" {
+        panic("Need to supply a destination for the files to encrypt.  Should be a local path to the source files or an index csv with paths defined within.")
+    }
+
+    if options.Directory != "" && options.ShareFromList != "" {
+        panic("Do not use both the '--directory' paramter and '--share-from-list' parameter, as their behavior is exclusive.")
+    }
 
     if options.Directory == "/" {
         panic("Input directory cannot be root!")
@@ -312,7 +374,6 @@ func init() {
 
     // core flags
 	shareCmd.PersistentFlags().String("directory", "", "The directory to zip, encrypt and share.")
-	shareCmd.MarkFlagRequired("directory")
 	shareCmd.PersistentFlags().String("org", "", "The Org that owns the files.")
 	shareCmd.MarkFlagRequired("org")
 	shareCmd.PersistentFlags().String("prefix", "", "A prefix for the S3 path. Currently used to separate clinical and documents files.")
@@ -329,12 +390,13 @@ func init() {
     shareCmd.PersistentFlags().String("archive-directory", "", "If provided, contents of upload directory are moved here after each batch.")
     shareCmd.PersistentFlags().String("metadata-files", "", "If provided, these files are the first to be uploaded and the last to be archived out of the input directory. Comma-separated. I.E. --metadata-files=file1,file2,file3")
     shareCmd.PersistentFlags().Bool("delete-on-completion", true, "If provided, provided directory will be deleted upon the upload of the files.")
+    shareCmd.PersistentFlags().String("share-from-list", "", "Local path and filename for encrypting files directly from a CSV index.")
 
     // ssm key options
 	shareCmd.PersistentFlags().String("awskey", "", "The agreed upon S3 key to encrypt data with at the bucket.")
 	shareCmd.PersistentFlags().String("receiver-public-key", "", "The receiver's public key.  A local file path.")
 	shareCmd.PersistentFlags().String("ssm-public-key", "", "The receiver's public key.  A local file path.")
-	shareCmd.PersistentFlags().Bool("is-gcs", false, "The receiver's public key.  A local file path.")
+    shareCmd.PersistentFlags().Bool("is-gcs", false, "Boolean to determine whether to use GCS. Defaults to false.")
 
 	viper.BindPFlag("directory", shareCmd.PersistentFlags().Lookup("directory"))
 	viper.BindPFlag("org", shareCmd.PersistentFlags().Lookup("org"))
@@ -352,6 +414,7 @@ func init() {
 	viper.BindPFlag("is-gcs", shareCmd.PersistentFlags().Lookup("is-gcs"))
 	viper.BindPFlag("aws-profile", shareCmd.PersistentFlags().Lookup("aws-profile"))
 	viper.BindPFlag("delete-on-completion", shareCmd.PersistentFlags().Lookup("delete-on-completion"))
+    viper.BindPFlag("share-from-list", shareCmd.PersistentFlags().Lookup("share-from-list"))
 
 	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetFormatter(&log.TextFormatter{})

@@ -2,7 +2,9 @@ package zip
 
 import (
 	"archive/zip"
+	"bytes"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +56,35 @@ func ZipFile(InputFn string, OutputFn string, directory string) string {
 	}
 
 	return OutputFn
+}
+
+// ZipFile zips the provided file.
+func ZipFileInMemory(InputFn string, date_folder string) *bytes.Buffer {
+
+	log.Debugf("Zipping file '%s' in memory", InputFn)
+
+	source, err := os.Open(InputFn)
+	utils.PanicIfError("Unable to open source file - ", err)
+	defer source.Close()
+
+	_, file_name := filepath.Split(InputFn)
+	// create output buffer
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
+
+	f, err := zipWriter.Create(filepath.Join(date_folder, file_name))
+	utils.PanicIfError("Unable to create writer - ", err)
+
+	data, err := ioutil.ReadAll(source)
+	utils.PanicIfError("Unable to write to file to bytes - ", err)
+
+	_, err = f.Write(data)
+	utils.PanicIfError("Unable to write to file writer - ", err)
+
+	err = zipWriter.Close()
+	utils.PanicIfError("Unable to close writer - ", err)
+
+	return buf
 }
 
 // UnZipFile uncompresses and archive

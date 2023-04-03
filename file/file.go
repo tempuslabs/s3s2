@@ -1,17 +1,17 @@
 package file
 
 import (
-    "errors"
-    "strings"
-    "os"
-    "fmt"
-    "path/filepath"
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
-    log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
-    options "github.com/tempuslabs/s3s2/options"
+	options "github.com/tempuslabs/s3s2/options"
 	utils "github.com/tempuslabs/s3s2/utils"
-
 )
 
 type File struct {
@@ -37,9 +37,9 @@ func (f *File) GetEncryptedName(directory string) string {
 // Break an array of objects into an array of chunks of n size
 func ChunkArray(in_array []File, chunk_size int) [][]File {
 
-   var chunks [][]File
+    var chunks [][]File
 
-   for i := 0; i < len(in_array); i += chunk_size {
+    for i := 0; i < len(in_array); i += chunk_size {
         end := i + chunk_size
 
         if end > len(in_array) {
@@ -109,6 +109,58 @@ func GetFileStructsFromDir(directory string, opts options.Options) ([]File, []Fi
 
 }
 
+func GetFileStructsFromCsv(indexPath string, dateFolder string, opts options.Options) ([]File, []File, error) {
+    var file_structs_metadata []File
+    var file_structs []File
+
+    f, err := os.Open(indexPath)
+    if err != nil {
+        log.Fatal("Unable to read input file "+indexPath, err)
+    }
+    defer f.Close()
+
+    csvReader := csv.NewReader(f)
+    records, err := csvReader.ReadAll()
+    if err != nil {
+        log.Fatal("Unable to parse file as CSV for "+indexPath, err)
+    }
+
+    for _, row := range records {
+        // fileKey := row[0]
+        filePath := row[1]
+        if filePath == "file_path" {
+            continue
+        }
+        basename := filepath.Base(filePath)
+        fileInfo, err := os.Lstat(filePath)
+        utils.PanicIfError("Unable to read file metadata - ", err)
+
+        if includeFile(fileInfo, filePath, opts) {
+            log.Debugf("Registering '%s' to manifest", filePath)
+            // if current file is a metadata file, append to dedicated metadata chunk
+            if utils.Include(opts.MetaDataFiles, basename) {
+                file_structs_metadata = append(file_structs_metadata, File{Name: filePath})
+                // otherwise append to normal file chunk
+            } else {
+                file_structs = append(file_structs, File{Name: filePath})
+            }
+        } else {
+            log.Debugf("Skipping over file '%s' - this file will NOT be encrypted or sent...", fileInfo)
+        }
+    }
+
+    // if we expect metadata files and don't pick them up, there might be a typo
+    if len(opts.MetaDataFiles) > 0 && len(file_structs_metadata) == 0 {
+        err = errors.New("Metadata files specified but none identified in input directory. Check your spelling and that the files exist in the input directory")
+        panic(err)
+    }
+
+    log.Debugf("Identified metadata-files '%s'...", file_structs_metadata)
+
+    return file_structs, file_structs_metadata, err
+
+}
+
 func ArchiveFileStructs(file_structs_to_archive []File, input_dir string, archive_dir string) error {
 
     os.MkdirAll(archive_dir, os.ModePerm)
@@ -143,4 +195,3 @@ func ArchiveFileStructs(file_structs_to_archive []File, input_dir string, archiv
     }
     return err
 }
-

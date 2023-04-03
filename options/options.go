@@ -24,6 +24,7 @@ type Options struct {
 	BatchSize          int      `json:"batchsize"`
 	LambdaTrigger      bool     `json:"lambda-trigger"`
 	DeleteOnCompletion bool     `json:"delete-on-completion"`
+	ShareFromList      string   `json:"share-from-list"`
 
 	// Decrypt only
 	File        string `json:"file"`

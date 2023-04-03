@@ -1,16 +1,15 @@
 package main_test
 
 import (
-    "runtime"
+	"runtime"
 	"testing"
 
-    "io"
+	"io"
 	"os"
 
 	zip "github.com/tempuslabs/s3s2/zip"
 
 	"github.com/stretchr/testify/assert"
-
 )
 
 func fileExists(filename string) bool {
@@ -64,6 +63,17 @@ func TestZipFileCreation(t * testing.T) {
 
     zip.ZipFile(input_file_path, output_file_path, "s3s2")
     assert.True(fileExists(output_file_path))
+}
+
+// Test that the input file can be created into a memory buffer
+func TestZipFileInMemory(t * testing.T) {
+	assert := assert.New(t)
+
+	input_file_path, _ := setUpEnv()
+	date_folder := "20230330"
+	b := zip.ZipFileInMemory(input_file_path, date_folder)
+
+	assert.True(b.Bytes() != nil)
 }
 
 func TestUnZipFileCreation(t * testing.T) {

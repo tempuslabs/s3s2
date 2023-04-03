@@ -1,7 +1,7 @@
-
 package encrypt
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto"
 	"crypto/rand"
@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-    session "github.com/aws/aws-sdk-go/aws/session"
+	session "github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	log "github.com/sirupsen/logrus"
-	options "github.com/tempuslabs/s3s2/options"
 	aws_helpers "github.com/tempuslabs/s3s2/aws_helpers"
+	options "github.com/tempuslabs/s3s2/options"
 	utils "github.com/tempuslabs/s3s2/utils"
 
 	// For the signature algorithm.
@@ -26,7 +26,6 @@ import (
 	"golang.org/x/crypto/openpgp/armor"
 	"golang.org/x/crypto/openpgp/packet"
 )
-
 
 // Logic to fetch the public encryption key
 // depending on arguments provided, will get from SSM or provided file
@@ -200,6 +199,33 @@ func EncryptFile(pubKey *packet.PublicKey, InputFn string, OutputFn string, Opts
 	compressed.Close()
 
 	return OutputFn
+}
+
+func EncryptBuffer(pubKey *packet.PublicKey, InputBf *bytes.Buffer, Opts options.Options) *bytes.Buffer {
+
+	to := createEntityFromKeys(pubKey, nil) // We shouldn't have the receiver's private key!
+
+	obuffer := new(bytes.Buffer)
+	writer := io.Writer(obuffer)
+
+	w, err := armor.Encode(writer, "Message", make(map[string]string))
+	utils.PanicIfError("Unable to encode encrypted file location - ", err)
+	defer w.Close()
+
+	config := getEncryptionConfig()
+	// Here the signer should be the sender
+	plain, err := openpgp.Encrypt(w, []*openpgp.Entity{to}, nil, &openpgp.FileHints{IsBinary: true}, &config)
+	utils.PanicIfError("Unable to perform encryption - ", err)
+	defer plain.Close()
+
+	compressed, err := gzip.NewWriterLevel(plain, gzip.BestCompression)
+	utils.PanicIfError("Unable to perform compression - ", err)
+	defer compressed.Close()
+
+	_, err = io.Copy(compressed, InputBf)
+	utils.PanicIfError("Error writing encrypted file - ", err)
+
+	return obuffer
 }
 
 func DecryptFile(_pubkey *packet.PublicKey, _privkey *packet.PrivateKey, InputFn string, OutputFn string, opts options.Options) {
