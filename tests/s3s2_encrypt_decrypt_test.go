@@ -1,18 +1,18 @@
 package main_test
 
 import (
-	"testing"
 	"bytes"
-	"os"
-	"golang.org/x/crypto/openpgp/packet"
-	log "github.com/sirupsen/logrus"
-	encrypt "github.com/tempuslabs/s3s2/encrypt"
-	"github.com/stretchr/testify/assert"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/tempuslabs/s3s2/options"
 	"io/ioutil"
-)
+	"os"
+	"testing"
 
+	"github.com/aws/aws-sdk-go/aws/session"
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	encrypt "github.com/tempuslabs/s3s2/encrypt"
+	"github.com/tempuslabs/s3s2/options"
+	"golang.org/x/crypto/openpgp/packet"
+)
 
 // helper functions to prepare tests
 func get_options() options.Options {
@@ -32,6 +32,7 @@ func get_options() options.Options {
             Parallelism     : 10,
             BatchSize       : 10,
             LambdaTrigger   : false,
+			ShareFromList   : "",
         }
 }
 
@@ -73,6 +74,20 @@ func TestEncryptFile(t * testing.T) {
     encrypt.EncryptFile(pub_key, fn_in, fn_out, get_options())
 
     assert.True(cryptFileExists(fn_out))
+
+}
+
+// test that our encryption creates a new file
+func TestEncryptBuffer(t * testing.T) {
+
+    fn_in := new(bytes.Buffer)
+
+    assert := assert.New(t)
+
+    pub_key := read_pub_key()
+    result := encrypt.EncryptBuffer(pub_key, fn_in, get_options())
+
+    assert.True(result.Bytes() != nil)
 
 }
 

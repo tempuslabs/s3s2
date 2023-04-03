@@ -1,22 +1,20 @@
-
 package gcp_helper
 
 import (
+	"bytes"
 	"context"
-	"os"
-    "path/filepath"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
-	"google.golang.org/api/option"
+
+	"cloud.google.com/go/storage"
 	log "github.com/sirupsen/logrus"
 	options "github.com/tempuslabs/s3s2/options"
 	utils "github.com/tempuslabs/s3s2/utils"
-	"cloud.google.com/go/storage"
-	
-	
+	"google.golang.org/api/option"
 )
-
 
 // Given file, open contents and send to S3
 func UploadFile(org string, aws_key string, local_path string, opts options.Options) error {
@@ -26,8 +24,6 @@ func UploadFile(org string, aws_key string, local_path string, opts options.Opti
 	defer client.Close()
 
 	utils.PanicIfError("Unable to get clients - ", err)
-	
-
 
     file, err := os.Open(local_path)
 	defer file.Close()
@@ -36,8 +32,6 @@ func UploadFile(org string, aws_key string, local_path string, opts options.Opti
 
     final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(strings.ToUpper(org), aws_key)))
     log.Debugf("Uploading file '%s' to aws key '%s'", local_path, final_key)
-
-   
 
 	wc := client.Bucket(opts.Bucket).Object(final_key).NewWriter(ctx)
 	defer wc.Close()
@@ -52,7 +46,36 @@ func UploadFile(org string, aws_key string, local_path string, opts options.Opti
 		return err
 	}
 
-	
+	return nil
+
+}
+
+// Given buffer, send to GCS
+func UploadBuffer(org string, aws_key string, inputBuffer *bytes.Buffer, local_path string, opts options.Options) error {
+	ctx := context.Background()
+
+	client, err := storage.NewClient(ctx)
+	utils.PanicIfError("Unable to get clients - ", err)
+	defer client.Close()
+
+	utils.PanicIfError("Failed to open file for upload - ", err)
+
+	final_key := utils.ToPosixPath(filepath.Clean(filepath.Join(strings.ToUpper(org), aws_key)))
+	log.Debugf("Uploading file '%s' to aws key '%s'", local_path, final_key)
+
+	wc := client.Bucket(opts.Bucket).Object(final_key).NewWriter(ctx)
+	defer wc.Close()
+	wc.ContentType = "text/plain"
+
+	_, err = io.Copy(wc, inputBuffer)
+
+	if err != nil {
+		utils.PanicIfError("Failed to upload file: ", err)
+	} else {
+		log.Debugf("File '%s' uploaded to:  bucket = '%s', key = '%s'", local_path, opts.Bucket, final_key)
+		return err
+	}
+
 	return nil
 
 }
