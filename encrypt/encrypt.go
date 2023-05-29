@@ -36,7 +36,7 @@ func GetPubKey(sess *session.Session, opts options.Options) *packet.PublicKey {
     // if provided SSM Pub Key, then fetch from SSM
     if opts.SSMPubKey != "" {
         ssm_service := ssm.New(sess)
-		in = strings.NewReader(aws_helpers.GetParameterValue(ssm_service, opts.SSMPubKey))
+		in = strings.NewReader(aws_helpers.GetParameterValue(ssm_service, opts.SSMPubKey, opts))
 
     // if provided original filepath value, then use instead
     } else if opts.PubKey != "" {
@@ -73,7 +73,7 @@ func GetPrivKey(sess *session.Session, opts options.Options) *packet.PrivateKey 
     // if provided SSM Priv Key, then fetch from SSM
     if opts.SSMPrivKey != "" {
         ssm_service := ssm.New(sess)
-		in = strings.NewReader(aws_helpers.GetParameterValue(ssm_service, opts.SSMPrivKey))
+		in = strings.NewReader(aws_helpers.GetParameterValue(ssm_service, opts.SSMPrivKey, opts))
 
     // if provided original filepath value, then use instead
     } else if opts.PrivKey != "" {
