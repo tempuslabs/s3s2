@@ -26,20 +26,20 @@ decrypt.argtypes = [
 ]
 decrypt.restype = ctypes.c_int
 """
-tl-alp-cc-provider-secured-batch-onramp/AON/clinical_ClinicalData_s3s2_20221118034423_0/s3s2_manifest.json
+BUCKET/PATH_TO_BATCH/somebatch/s3s2_manifest.json
 """
 
-bucket = 'tl-alp-cc-provider-secured-batch-onramp'
-file = 'clinical_ClinicalData_s3s2_20221118034423_0/s3s2_manifest.json'
+bucket = 'bucket'
+file = 'path_to/batch/s3s2_manifest.json'
 directory = "~/Desktop2/s3s2-save"
-org = "aon"
+org = "someorg"
 region = "us-west-2"
-awsProfile = "tempusdevops-nishant-sharma"
+awsProfile = "someprofile"
 pubKey = ""
 privKey = ""
-ssmPubKey = "/staging/n_composer/dag/sftp_to_s3_/PRIVATE_KEY_S3S2"
-ssmPrivKey = "/staging/n_composer/dag/sftp_to_s3_/PUBLIC_KEY_S3S2"
-filePatterns = '*/SalesDB2014_Split2*'
+ssmPubKey = "/ssmpath/PRIVATE_KEY_S3S2"
+ssmPrivKey = "/ssmpath/PUBLIC_KEY_S3S2"
+filePatterns = '*/filename*'
 
 try:
 
