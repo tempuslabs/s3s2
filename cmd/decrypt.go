@@ -102,14 +102,37 @@ var decryptCmd = &cobra.Command{
 					defer func() { <-sem }()
 					defer wg.Done()
 					// if block is for cases where AWS session expires, so we re-create session and attempt file again
-					if decryptFile(sess, _pubKey, _privKey, m, fs, opts) != nil {
+					err, skipped := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
+					if err != nil || skipped {
 						sess = utils.GetAwsSession(opts)
-						err := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
+						err, skipped := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
 						if err != nil {
+							log.Warn("Error during decrypt-file session expiration if block!")
+							log.Errorf("Error: '%v'", err)
+							panic(err)
 						}
-						log.Warn("Error during decrypt-file session expiration if block!")
-						log.Errorf("Error: '%v'", err)
-						panic(err)
+						if skipped {
+							f, err := os.OpenFile("skipped.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+							if err != nil {
+								log.Errorf("Error opening skipped.txt: %v", err)
+							} else {
+								if _, err := f.WriteString(fs.Name + "\n"); err != nil {
+									log.Errorf("Error writing to skipped.txt: %v", err)
+								}
+								f.Close()
+							}
+						}
+					}
+					if skipped {
+						f, err := os.OpenFile("skipped.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+						if err != nil {
+							log.Errorf("Error opening skipped.txt: %v", err)
+						} else {
+							if _, err := f.WriteString(fs.Name + "\n"); err != nil {
+								log.Errorf("Error writing to skipped.txt: %v", err)
+							}
+							f.Close()
+						}
 					}
 				}(&wg, sess, _pubKey, _privKey, batch_folder, fs, opts)
 			}
@@ -118,10 +141,10 @@ var decryptCmd = &cobra.Command{
 	},
 }
 
-func decryptFile(sess *session.Session, _pubkey *packet.PublicKey, _privkey *packet.PrivateKey, m manifest.Manifest, fs file.File, opts options.Options) error {
+func decryptFile(sess *session.Session, _pubkey *packet.PublicKey, _privkey *packet.PrivateKey, m manifest.Manifest, fs file.File, opts options.Options) (error, bool) {
 	start := time.Now()
+	skipped := false
 	log.Debugf("Starting decryption on file '%s'", fs.Name)
-
 	// enforce posix path
 	fs.Name = utils.ToPosixPath(fs.Name)
 
@@ -137,12 +160,23 @@ func decryptFile(sess *session.Session, _pubkey *packet.PublicKey, _privkey *pac
 	_, err := aws_helpers.DownloadFile(sess, opts.Bucket, m.Organization, aws_key, target_path, opts)
 	utils.PanicIfError("Unable to download file - ", err)
 
-	encrypt.DecryptFile(_pubkey, _privkey, target_path, fn_zip, opts)
-	zip.UnZipFile(fn_zip, fn_decrypt, opts.Directory)
+	// Check if downloaded file is empty
+	fileInfo, err := os.Stat(target_path)
+	if err != nil {
+		log.Errorf("Error getting file info: %v", err)
+		return err, skipped
+	}
+	if fileInfo.Size() == 0 {
+		log.Warningf("Downloaded file '%s' is empty", target_path)
+		skipped = true
+	} else {
+		encrypt.DecryptFile(_pubkey, _privkey, target_path, fn_zip, opts)
+		zip.UnZipFile(fn_zip, fn_decrypt, opts.Directory)
 
-	utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", fs.Name)+"%f seconds")
+		utils.Timing(start, fmt.Sprintf("\tProcessed file '%s' in ", fs.Name)+"%f seconds")
+	}
 
-	return err
+	return err, skipped
 }
 
 func buildDecryptOptions() options.Options {
