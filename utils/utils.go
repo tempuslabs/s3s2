@@ -21,13 +21,6 @@ import (
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
 
-    "context"
-    "log"
-
-    "google.golang.org/api/idtoken"
-
-    "github.com/aws/aws-sdk-go-v2/aws"
-    "github.com/aws/aws-sdk-go-v2/config"
     stscreds "github.com/aws/aws-sdk-go-v2/credentials/stscreds"
     sts "github.com/aws/aws-sdk-go-v2/service/sts"
 )
