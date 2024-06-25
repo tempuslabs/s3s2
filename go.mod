@@ -15,8 +15,6 @@ require (
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.23.0
 	google.golang.org/api v0.180.0
-	google.golang.org/api/idtoken v0.1.0
-    google.golang.org/api/option v0.1.0
 )
 
 require (
