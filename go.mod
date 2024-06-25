@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/storage v1.41.0
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/aws/aws-sdk-go v1.53.2
+	github.com/aws/aws-sdk-go-v2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/json-iterator/go v1.1.12
 	github.com/mitchellh/go-homedir v1.1.0

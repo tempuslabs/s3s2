@@ -21,8 +21,8 @@ import (
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
 
-    stscreds "github.com/aws/aws-sdk-go/credentials/stscreds"
-    sts "github.com/aws/aws-sdk-go/service/sts"
+    stscreds "github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+    sts "github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 // Helper function to log a debug message of the elapsed time since input time
