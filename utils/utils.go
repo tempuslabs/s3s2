@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 
     "context"
-    "log"
     "net/http"
 
     "google.golang.org/api/idtoken"
