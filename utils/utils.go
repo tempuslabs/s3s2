@@ -9,11 +9,27 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 
+    "context"
+    "log"
+    "net/http"
+
+    "google.golang.org/api/idtoken"
+
 	session "github.com/aws/aws-sdk-go/aws/session"
 	options "github.com/tempuslabs/s3s2/options"
 	client "github.com/aws/aws-sdk-go/aws/client"
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
+
+    "context"
+    "log"
+
+    "google.golang.org/api/idtoken"
+
+    "github.com/aws/aws-sdk-go-v2/aws"
+    "github.com/aws/aws-sdk-go-v2/config"
+    stscreds "github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+    sts "github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 // Helper function to log a debug message of the elapsed time since input time
@@ -130,20 +146,51 @@ func getAwsConfig(opts options.Options) aws.Config {
 func GetAwsSession(opts options.Options) *session.Session {
     var sess *session.Session
 
+    // Load the default AWS SDK config
+    cfg, err := config.LoadDefaultConfig(context.TODO())
+    if err != nil {
+        log.Fatalf("unable to load SDK config, %v", err)
+    }
+    stsClient := sts.NewFromConfig(cfg)
+    token := GetWorkloadIdentityToken()
+    webIdentityProvider := stscreds.NewWebIdentityRoleProviderWithOptions(stsClient, opts.AwsRoleArn, token)
+    awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithCredentialsProvider(webIdentityProvider))
+
     // intended on share when ran on partner server using credential files
     if opts.AwsProfile != "" {
         log.Debugf("Using AWS Profile '%s'", opts.AwsProfile)
         sess = session.Must(session.NewSessionWithOptions(session.Options{
         Profile: opts.AwsProfile,
-        Config: getAwsConfig(opts),
+        Config: awsCfg,
         SharedConfigState: session.SharedConfigEnable,
         }))
     // intended on decrypt when ran on ec2 instance using sts
     } else {
         sess = session.Must(session.NewSessionWithOptions(session.Options{
-        Config: getAwsConfig(opts),
+        Config: awsCfg,
         AssumeRoleDuration: 12 * time.Hour,
         }))
     }
     return sess
+}
+
+
+// Get the workload identity token for the current GCP service account
+func GetWorkloadIdentityToken() string {
+    targetAudience = "unused"
+    // Create a context
+    ctx := context.Background()
+
+    // Create a token source
+    tokenSource, err := idtoken.NewTokenSource(ctx, targetAudience)
+    if err != nil {
+        log.Fatalf("failed to create token source: %v", err)
+    }
+
+    // Fetch the token
+    token, err := tokenSource.Token()
+    if err != nil {
+        log.Fatalf("Failed to fetch token: %v", err)
+    }
+    return token.AccessToken
 }
