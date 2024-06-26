@@ -394,6 +394,7 @@ func init() {
     shareCmd.PersistentFlags().String("metadata-files", "", "If provided, these files are the first to be uploaded and the last to be archived out of the input directory. Comma-separated. I.E. --metadata-files=file1,file2,file3")
     shareCmd.PersistentFlags().Bool("delete-on-completion", true, "If provided, provided directory will be deleted upon the upload of the files.")
     shareCmd.PersistentFlags().String("share-from-list", "", "Local path and filename for encrypting files directly from a CSV index.")
+	shareCmd.PersistentFlags().String("aws-role-arn", "", "AWS Role ARN to assume for the session.")
 
     // ssm key options
 	shareCmd.PersistentFlags().String("awskey", "", "The agreed upon S3 key to encrypt data with at the bucket.")
@@ -418,6 +419,7 @@ func init() {
 	viper.BindPFlag("aws-profile", shareCmd.PersistentFlags().Lookup("aws-profile"))
 	viper.BindPFlag("delete-on-completion", shareCmd.PersistentFlags().Lookup("delete-on-completion"))
     viper.BindPFlag("share-from-list", shareCmd.PersistentFlags().Lookup("share-from-list"))
+	viper.BindPFlag("aws-role-arn", shareCmd.PersistentFlags().Lookup("aws-role-arn"))
 
 	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetFormatter(&log.TextFormatter{})

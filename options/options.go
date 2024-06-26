@@ -9,6 +9,7 @@ type Options struct {
 	Directory   string `json:"directory"`
 	Org         string `json:"org"`
 	Parallelism int    `json:"parallelism"`
+	AwsRoleArn	string `json:"aws-role-arn"`
 
 	// Encrypt only
 	PubKey             string   `json:"pubkey"`
@@ -25,7 +26,6 @@ type Options struct {
 	LambdaTrigger      bool     `json:"lambda-trigger"`
 	DeleteOnCompletion bool     `json:"delete-on-completion"`
 	ShareFromList      string   `json:"share-from-list"`
-	AwsRoleArn		   string   `json:"aws-role-arn"`
 
 	// Decrypt only
 	File        string `json:"file"`

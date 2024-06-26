@@ -33,6 +33,8 @@ func GetPubKey(sess *session.Session, opts options.Options) *packet.PublicKey {
     var in io.Reader
     var err error
 
+	log.Debugf("Public Key options: %s", opts.PubKey)
+
     // if provided SSM Pub Key, then fetch from SSM
     if opts.SSMPubKey != "" {
         ssm_service := ssm.New(sess)
@@ -46,7 +48,9 @@ func GetPubKey(sess *session.Session, opts options.Options) *packet.PublicKey {
         panic("You must provide a public key argument!")
     }
 
+	log.Debugf("Public Key contents: %s", in)
 	pub_key_block, err := armor.Decode(in)
+	log.Debugf("Public Key contents decode: %s", pub_key_block)
 	utils.PanicIfError("Unable to decode public key block - ", err)
 
 	if pub_key_block.Type != openpgp.PublicKeyType {

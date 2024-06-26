@@ -133,8 +133,17 @@ func getAwsConfig(opts options.Options) aws.Config {
 func GetAwsSession(opts options.Options) *session.Session {
     var sess *session.Session
 
-    awsConfig, _ := federated_identity.FederatedIdentityConfig(context.TODO(), &opts.AwsRoleArn, &opts.Region)
-    awsRealConfig := *awsConfig
+    log.Debugf("Using AWS Role '%s'", opts.AwsRoleArn)
+    log.Debugf("Using IsGCS '%s'", opts.IsGCS)
+    awsRealConfig := getAwsConfig(opts)
+    log.Debugf("Using AWS Config '%s'", awsRealConfig)
+    if opts.IsGCS == false {
+        log.Debugf("Inside")
+        awsConfig, _ := federated_identity.FederatedIdentityConfig(context.TODO(), &opts.AwsRoleArn, &opts.Region)
+        log.Debugf("Using AWS Config '%s'", awsConfig)
+        awsRealConfig = *awsConfig
+    }
+    
 
     // intended on share when ran on partner server using credential files
     if opts.AwsProfile != "" {

@@ -2,7 +2,7 @@ package federatedidentity
 
 import (
 	"context"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -60,7 +60,7 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 	} else if envRegion, ok := os.LookupEnv("AWS_REGION"); ok {
 		regionString = envRegion
 	} else {
-		log.Default().Println("neither region nor $AWS_REGION defined; defaulting to 'us-east-1'")
+		log.Debugf("neither region nor $AWS_REGION defined; defaulting to 'us-east-1'")
 		regionString = "us-east-1"
 	}
 
@@ -74,5 +74,6 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 	creds := stscreds.NewWebIdentityCredentials(sess, *roleArn, "golang-federated-identity", "")
 
 	cfg := aws.NewConfig().WithRegion(regionString).WithCredentials(creds)
+	log.Debugf("Using AWS Config '%s'", cfg)
 	return cfg, nil
 }
