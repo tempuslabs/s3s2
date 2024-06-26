@@ -1,6 +1,7 @@
 package utils
 
 import (
+    "context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	client "github.com/aws/aws-sdk-go/aws/client"
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
+
+    federated_identity "github.com/tempuslabs/s3s2/federated_identity"
 )
 
 // Helper function to log a debug message of the elapsed time since input time
@@ -130,18 +133,21 @@ func getAwsConfig(opts options.Options) aws.Config {
 func GetAwsSession(opts options.Options) *session.Session {
     var sess *session.Session
 
+    awsConfig, _ := federated_identity.FederatedIdentityConfig(context.TODO(), &opts.AwsRoleArn, &opts.Region)
+    awsRealConfig := *awsConfig
+
     // intended on share when ran on partner server using credential files
     if opts.AwsProfile != "" {
         log.Debugf("Using AWS Profile '%s'", opts.AwsProfile)
         sess = session.Must(session.NewSessionWithOptions(session.Options{
         Profile: opts.AwsProfile,
-        Config: getAwsConfig(opts),
+        Config: awsRealConfig,
         SharedConfigState: session.SharedConfigEnable,
         }))
     // intended on decrypt when ran on ec2 instance using sts
     } else {
         sess = session.Must(session.NewSessionWithOptions(session.Options{
-        Config: getAwsConfig(opts),
+        Config: awsRealConfig,
         AssumeRoleDuration: 12 * time.Hour,
         }))
     }

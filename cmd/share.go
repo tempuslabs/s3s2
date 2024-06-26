@@ -44,6 +44,7 @@ var shareCmd = &cobra.Command{
 		viper.BindPFlag("ssm-public-key", cmd.Flags().Lookup("ssm-public-key"))
 		viper.BindPFlag("is-gcs", cmd.Flags().Lookup("is-gcs"))
 		viper.BindPFlag("share-from-list", cmd.Flags().Lookup("share-from-list"))
+		viper.BindPFlag("aws-role-arn", cmd.Flags().Lookup("aws-role-arn"))
 		cmd.MarkFlagRequired("org")
 		cmd.MarkFlagRequired("region")
 	},
@@ -293,6 +294,7 @@ func buildShareOptions(cmd *cobra.Command) options.Options {
 	parallelism := viper.GetInt("parallelism")
 	chunkSize := viper.GetInt("chunk-size")
 	batchSize := viper.GetInt("batch-size")
+	aws_role_arn := viper.GetString("aws-role-arn")
 
 	deleteOnCompletion := viper.GetBool("delete-on-completion")
 
@@ -323,6 +325,7 @@ func buildShareOptions(cmd *cobra.Command) options.Options {
 		LambdaTrigger      : lambdaTrigger,
 		DeleteOnCompletion : deleteOnCompletion,
 		ShareFromList      : shareFromList,
+		AwsRoleArn		   : aws_role_arn,
 	}
 
 	debug := viper.GetBool("debug")
