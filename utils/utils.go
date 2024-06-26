@@ -19,8 +19,11 @@ import (
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
 
-    stscreds "github.com/aws/aws-sdk-go-v2/credentials/stscreds"
-    sts "github.com/aws/aws-sdk-go-v2/service/sts"
+    "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"google.golang.org/api/idtoken"
 )
 
 // Helper function to log a debug message of the elapsed time since input time
@@ -168,7 +171,7 @@ func GetAwsSession(opts options.Options) *session.Session {
 
 // Get the workload identity token for the current GCP service account
 func GetWorkloadIdentityToken() string {
-    targetAudience = "unused"
+    targetAudience := "unused"
     // Create a context
     ctx := context.Background()
 

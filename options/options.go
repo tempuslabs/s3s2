@@ -25,6 +25,7 @@ type Options struct {
 	LambdaTrigger      bool     `json:"lambda-trigger"`
 	DeleteOnCompletion bool     `json:"delete-on-completion"`
 	ShareFromList      string   `json:"share-from-list"`
+	AwsRoleArn		   string   `json:"aws-role-arn"`
 
 	// Decrypt only
 	File        string `json:"file"`
