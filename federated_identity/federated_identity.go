@@ -42,10 +42,10 @@ func (e *NoRoleArnError) Error() string {
 
 func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *string, tokenRetriever *FederatedIdentityTokenRetriever) (*session.Session, error) {
 
-	_, inK8s := os.LookupEnv("KUBERNETES_SERVICE_HOST")
-	if !inK8s {
-		return nil, &NotInKubernetesError{}
-	}
+	//_, inK8s := os.LookupEnv("KUBERNETES_SERVICE_HOST")
+	//if !inK8s {
+	//	return nil, &NotInKubernetesError{}
+	//}
 
 	var regionString string
 	if region != nil {
@@ -62,6 +62,7 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 		log.Printf("Failed to fetch identity token: %v", err)
 		return nil, err
 	}
+	log.Debugf("Fetched identity token: %s", token)
 
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(regionString),
@@ -84,6 +85,11 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 		log.Printf("Failed to assume role: %v", err)
 		return nil, err
 	}
+
+	log.Debugf("Assumed role output: %s", *assumeRoleOutput)
+	log.Debugf("Assumed role access key: %s", *assumeRoleOutput.Credentials.AccessKeyId)
+	log.Debugf("Assumed role secret key: %s", *assumeRoleOutput.Credentials.SecretAccessKey)
+	log.Debugf("Assumed role session token: %s", *assumeRoleOutput.Credentials.SessionToken)
 
 	// Update the session credentials
 	sess.Config.Credentials = credentials.NewStaticCredentials(
