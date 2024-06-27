@@ -6,7 +6,8 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"google.golang.org/api/idtoken"
 )
@@ -15,16 +16,16 @@ var EXPIRY_WINDOW_SECONDS = 60 * 60 // 60 minutes
 
 type FederatedIdentityTokenRetriever struct{}
 
-func (f *FederatedIdentityTokenRetriever) GetIdentityToken() ([]byte, error) {
+func (f *FederatedIdentityTokenRetriever) GetIdentityToken() (string, error) {
 	tokenSource, err := idtoken.NewTokenSource(context.Background(), "unused")
 	if err != nil {
-		return []byte{}, err
+		return "", err
 	}
 	token, err := tokenSource.Token()
 	if err != nil {
-		return []byte{}, err
+		return "", err
 	}
-	return []byte(token.AccessToken), nil
+	return token.AccessToken, nil
 }
 
 type NotInKubernetesError struct{}
@@ -39,19 +40,11 @@ func (e *NoRoleArnError) Error() string {
 	return "neither role nor $AWS_ROLE_ARN provided"
 }
 
-func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *string) (*aws.Config, error) {
+func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *string, tokenRetriever *FederatedIdentityTokenRetriever) (*session.Session, error) {
+
 	_, inK8s := os.LookupEnv("KUBERNETES_SERVICE_HOST")
 	if !inK8s {
 		return nil, &NotInKubernetesError{}
-	}
-
-	if roleArn == nil {
-		envArn, envArnExists := os.LookupEnv("AWS_ROLE_ARN")
-		if !envArnExists {
-			return nil, &NoRoleArnError{}
-		} else {
-			roleArn = &envArn
-		}
 	}
 
 	var regionString string
@@ -64,16 +57,44 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 		regionString = "us-east-1"
 	}
 
+	token, err := tokenRetriever.GetIdentityToken()
+	if err != nil {
+		log.Printf("Failed to fetch identity token: %v", err)
+		return nil, err
+	}
+
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(regionString),
 	})
 	if err != nil {
 		return nil, err
 	}
+	// Create STS client
+	stsSvc := sts.New(sess)
 
-	creds := stscreds.NewWebIdentityCredentials(sess, *roleArn, "golang-federated-identity", "")
+	// Assume the role using the token
+	assumeRoleOutput, err := stsSvc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
+		RoleArn:          aws.String(*roleArn),
+		RoleSessionName:  aws.String("golang-federated-identity"),
+		WebIdentityToken: aws.String(token),
+		DurationSeconds:  aws.Int64(int64(EXPIRY_WINDOW_SECONDS)),
+	})
+	
+	if err != nil {
+		log.Printf("Failed to assume role: %v", err)
+		return nil, err
+	}
 
-	cfg := aws.NewConfig().WithRegion(regionString).WithCredentials(creds)
-	log.Debugf("Using AWS Config '%s'", cfg)
-	return cfg, nil
+	// Update the session credentials
+	sess.Config.Credentials = credentials.NewStaticCredentials(
+		*assumeRoleOutput.Credentials.AccessKeyId,
+		*assumeRoleOutput.Credentials.SecretAccessKey,
+		*assumeRoleOutput.Credentials.SessionToken,
+	)
+	return sess, nil
+	//creds := stscreds.NewWebIdentityCredentials(sess, *roleArn, "golang-federated-identity", "")
+
+	//cfg := aws.NewConfig().WithRegion(regionString).WithCredentials(creds)
+	//log.Debugf("Using AWS Config '%s'", cfg)
+	//return cfg, nil
 }
