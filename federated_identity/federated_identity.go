@@ -3,7 +3,6 @@ package federatedidentity
 import (
 	"context"
 	log "github.com/sirupsen/logrus"
-	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -40,36 +39,14 @@ func (e *NoRoleArnError) Error() string {
 	return "neither role nor $AWS_ROLE_ARN provided"
 }
 
-func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *string, tokenRetriever *FederatedIdentityTokenRetriever) (*session.Session, error) {
-
-	//_, inK8s := os.LookupEnv("KUBERNETES_SERVICE_HOST")
-	//if !inK8s {
-	//	return nil, &NotInKubernetesError{}
-	//}
-
-	var regionString string
-	if region != nil {
-		regionString = *region
-	} else if envRegion, ok := os.LookupEnv("AWS_REGION"); ok {
-		regionString = envRegion
-	} else {
-		log.Debugf("neither region nor $AWS_REGION defined; defaulting to 'us-east-1'")
-		regionString = "us-east-1"
-	}
+func FederatedIdentityConfig(sess *session.Session, roleArn *string, tokenRetriever *FederatedIdentityTokenRetriever) (error) {
 
 	token, err := tokenRetriever.GetIdentityToken()
 	if err != nil {
-		log.Printf("Failed to fetch identity token: %v", err)
-		return nil, err
+		log.Debugf("Failed to fetch identity token: %v", err)
+		return err
 	}
-	log.Debugf("Fetched identity token: %s", token)
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(regionString),
-	})
-	if err != nil {
-		return nil, err
-	}
 	// Create STS client
 	stsSvc := sts.New(sess)
 
@@ -83,13 +60,10 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 	
 	if err != nil {
 		log.Printf("Failed to assume role: %v", err)
-		return nil, err
+		return err
 	}
-
+	// TODO: Remove after testing
 	log.Debugf("Assumed role output: %s", *assumeRoleOutput)
-	log.Debugf("Assumed role access key: %s", *assumeRoleOutput.Credentials.AccessKeyId)
-	log.Debugf("Assumed role secret key: %s", *assumeRoleOutput.Credentials.SecretAccessKey)
-	log.Debugf("Assumed role session token: %s", *assumeRoleOutput.Credentials.SessionToken)
 
 	// Update the session credentials
 	sess.Config.Credentials = credentials.NewStaticCredentials(
@@ -97,10 +71,6 @@ func FederatedIdentityConfig(ctx context.Context, roleArn *string, region *strin
 		*assumeRoleOutput.Credentials.SecretAccessKey,
 		*assumeRoleOutput.Credentials.SessionToken,
 	)
-	return sess, nil
-	//creds := stscreds.NewWebIdentityCredentials(sess, *roleArn, "golang-federated-identity", "")
 
-	//cfg := aws.NewConfig().WithRegion(regionString).WithCredentials(creds)
-	//log.Debugf("Using AWS Config '%s'", cfg)
-	//return cfg, nil
+	return nil
 }

@@ -1,7 +1,6 @@
 package utils
 
 import (
-    "context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	client "github.com/aws/aws-sdk-go/aws/client"
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
-
     federated_identity "github.com/tempuslabs/s3s2/federated_identity"
 )
 
@@ -133,37 +131,27 @@ func getAwsConfig(opts options.Options) aws.Config {
 func GetAwsSession(opts options.Options) *session.Session {
     var sess *session.Session
 
-    log.Debugf("Using AWS Role '%s'", opts.AwsRoleArn)
-    log.Debugf("Using IsGCS '%s'", opts.IsGCS)
-    awsRealConfig := getAwsConfig(opts)
-    log.Debugf("Using AWS Config '%s'", awsRealConfig)
-    if opts.IsGCS == false {
-        log.Debugf("Inside")
-        tokenRetriever := &federated_identity.FederatedIdentityTokenRetriever{}
-        sess, _ := federated_identity.FederatedIdentityConfig(context.TODO(), &opts.AwsRoleArn, &opts.Region, tokenRetriever)
-        log.Debugf("Using AWS sess '%s'", sess)
+    // intended on share when ran on partner server using credential files
+    if opts.AwsProfile != "" {
+        log.Debugf("Using AWS Profile '%s'", opts.AwsProfile)
+        sess = session.Must(session.NewSessionWithOptions(session.Options{
+        Profile: opts.AwsProfile,
+        Config: getAwsConfig(opts),
+        SharedConfigState: session.SharedConfigEnable,
+        }))
+    // intended on decrypt when ran on ec2 instance using sts
+    } else if opts.AwsRoleArn != "" {
+        log.Debugf("Using AWS Role ARN '%s'", opts.AwsRoleArn)
+        sess = session.Must(session.NewSessionWithOptions(session.Options{
+        Config: getAwsConfig(opts),
+        }))
+        tokenRetriever := federated_identity.FederatedIdentityTokenRetriever{}
+        federated_identity.FederatedIdentityConfig(sess, &opts.AwsRoleArn, &tokenRetriever)
     } else {
         sess = session.Must(session.NewSessionWithOptions(session.Options{
-            Config: awsRealConfig,
-            AssumeRoleDuration: 12 * time.Hour,
+        Config: getAwsConfig(opts),
+        AssumeRoleDuration: 12 * time.Hour,
         }))
     }
-    
-
-    // intended on share when ran on partner server using credential files
-    //if opts.AwsProfile != "" {
-    //    log.Debugf("Using AWS Profile '%s'", opts.AwsProfile)
-    //    sess = session.Must(session.NewSessionWithOptions(session.Options{
-    //    Profile: opts.AwsProfile,
-    //    Config: awsRealConfig,
-    //    SharedConfigState: session.SharedConfigEnable,
-    //    }))
-    // intended on decrypt when ran on ec2 instance using sts
-    //} else {
-    //    sess = session.Must(session.NewSessionWithOptions(session.Options{
-    //    Config: awsRealConfig,
-    //    AssumeRoleDuration: 12 * time.Hour,
-    //    }))
-    //}
     return sess
 }
