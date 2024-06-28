@@ -114,7 +114,12 @@ func RefreshSession(sess *session.Session, roleArn *string) {
     for {
 		log.Debugf("Refreshing credentials")
 		// Refresh the credentials every before EXPIRY_WINDOW_SECONDS
-		refreshSeconds := EXPIRY_WINDOW_SECONDS * 0.90
+		refreshSeconds := EXPIRY_WINDOW_SECONDS - 120
+		if refreshSeconds < 0 {
+			// If the EXPRIY_WINDOW_SECONDS is less than 120 seconds,
+			// refresh every second
+			refreshSeconds = 1
+		}
 		time.Sleep(time.Duration(refreshSeconds) * time.Second)
         tokenRetriever := FederatedIdentityTokenRetriever{}
         FederatedIdentityConfig(sess, roleArn, &tokenRetriever)
