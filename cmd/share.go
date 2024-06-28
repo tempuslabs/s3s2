@@ -24,6 +24,8 @@ import (
 	options "github.com/tempuslabs/s3s2/options"
 	utils "github.com/tempuslabs/s3s2/utils"
 	zip "github.com/tempuslabs/s3s2/zip"
+
+	federated_identity "github.com/tempuslabs/s3s2/federated_identity"
 )
 
 // shareCmd represents the share command
@@ -104,8 +106,16 @@ var shareCmd = &cobra.Command{
 
 		    log.Debugf("Processing chunk '%d'...", i_chunk)
 
+			// Check if a previous goroutine is running to refresh the session for
+			// federated identity. If so, stop it before starting a new one.
+			federated_identity.StopRefreshSession()
+
 		    // refresh session every chunk
 		    sess = utils.GetAwsSession(opts)
+			if opts.AwsRoleArn != "" {
+				// Start a new goroutine to refresh the session
+				federated_identity.StartRefreshSession(sess, &opts.AwsRoleArn)
+			}
 
             // tie off this current s3 directory allowing us to decrypt in batches of this size
             // this is used to create digestable folders for decrypt

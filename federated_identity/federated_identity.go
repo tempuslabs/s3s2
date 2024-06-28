@@ -2,6 +2,8 @@ package federatedidentity
 
 import (
 	"context"
+	"time"
+	"sync"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -12,6 +14,12 @@ import (
 )
 
 var EXPIRY_WINDOW_SECONDS = 60 * 60 // 60 minutes
+
+var (
+	mu        sync.Mutex
+	stopCh    chan struct{}
+	running   bool
+)
 
 type FederatedIdentityTokenRetriever struct{}
 
@@ -73,4 +81,43 @@ func FederatedIdentityConfig(sess *session.Session, roleArn *string, tokenRetrie
 	)
 
 	return nil
+}
+
+func StartRefreshSession(sess *session.Session, roleArn *string) {
+	// Check that the session is not already running
+	// If it is, return otherwise set it to running and start
+	// the goroutine with RefreshSession
+	mu.Lock()
+	defer mu.Unlock()
+	if running {
+		log.Debugf("RefreshSession already running...")
+		return
+	}
+	stopCh = make(chan struct{})
+	running = true
+	go RefreshSession(sess, roleArn)
+}
+
+func StopRefreshSession() {
+	// Check that the session is running and if it is, close 
+	// the stop channel
+	mu.Lock()
+	defer mu.Unlock()
+	if running {
+		log.Debugf("Stopping RefreshSession...")
+		close(stopCh)
+		running = false
+	}
+}
+
+func RefreshSession(sess *session.Session, roleArn *string) {
+    for {
+		log.Debugf("Refreshing credentials")
+		// Refresh the credentials every before EXPIRY_WINDOW_SECONDS
+		refreshSeconds := EXPIRY_WINDOW_SECONDS * 0.90
+		time.Sleep(time.Duration(refreshSeconds) * time.Second)
+        tokenRetriever := FederatedIdentityTokenRetriever{}
+        FederatedIdentityConfig(sess, roleArn, &tokenRetriever)
+		log.Debugf("Refreshed credentials!!!!")
+    }
 }
