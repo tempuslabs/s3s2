@@ -9,6 +9,7 @@ type Options struct {
 	Directory   string `json:"directory"`
 	Org         string `json:"org"`
 	Parallelism int    `json:"parallelism"`
+	AwsRoleArn	string `json:"aws-role-arn"`
 
 	// Encrypt only
 	PubKey             string   `json:"pubkey"`

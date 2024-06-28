@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # this script can run against PRs. dont publish PRs!
-if [[ ${GIT_BRANCH} != "master" ]]; then
-  echo "Non-master build detected. Skipping publish."
-  exit 0
-fi
+#if [[ ${GIT_BRANCH} != "master" ]]; then
+#  echo "Non-master build detected. Skipping publish."
+#  exit 0
+#fi
 
 NEXUS_PATH='https://nexus.opstempus.com/repository/tempus-n'
 PUBLIC_S3_BUCKET='tdo-n-message-gateway-s3s2-use1'

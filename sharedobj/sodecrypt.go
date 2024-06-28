@@ -109,6 +109,7 @@ func Decrypt(
 				defer func() { <-sem }()
 				defer wg.Done()
 				// if block is for cases where AWS session expires, so we re-create session and attempt file again
+				// RefreshSession logic is not needed here since stale sessions are handled in the if block
 				err, skipped := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
 				if err != nil || skipped {
 					sess = utils.GetAwsSession(opts)
