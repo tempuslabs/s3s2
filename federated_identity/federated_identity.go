@@ -70,8 +70,6 @@ func FederatedIdentityConfig(sess *session.Session, roleArn *string, tokenRetrie
 		log.Printf("Failed to assume role: %v", err)
 		return err
 	}
-	// TODO: Remove after testing
-	log.Debugf("Assumed role output: %s", *assumeRoleOutput)
 
 	// Update the session credentials
 	sess.Config.Credentials = credentials.NewStaticCredentials(
