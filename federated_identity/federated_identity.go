@@ -121,6 +121,5 @@ func RefreshSession(sess *session.Session, roleArn *string) {
 		time.Sleep(time.Duration(refreshSeconds) * time.Second)
         tokenRetriever := FederatedIdentityTokenRetriever{}
         FederatedIdentityConfig(sess, roleArn, &tokenRetriever)
-		log.Debugf("Refreshed credentials!!!!")
     }
 }
