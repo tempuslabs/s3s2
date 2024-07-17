@@ -14,6 +14,7 @@ import (
 	client "github.com/aws/aws-sdk-go/aws/client"
 	retryer "github.com/tempuslabs/s3s2/retryer"
 	log "github.com/sirupsen/logrus"
+    federated_identity "github.com/tempuslabs/s3s2/federated_identity"
 )
 
 // Helper function to log a debug message of the elapsed time since input time
@@ -139,6 +140,13 @@ func GetAwsSession(opts options.Options) *session.Session {
         SharedConfigState: session.SharedConfigEnable,
         }))
     // intended on decrypt when ran on ec2 instance using sts
+    } else if opts.AwsRoleArn != "" {
+        log.Debugf("Using AWS Role ARN '%s'", opts.AwsRoleArn)
+        sess = session.Must(session.NewSessionWithOptions(session.Options{
+        Config: getAwsConfig(opts),
+        }))
+        tokenRetriever := federated_identity.FederatedIdentityTokenRetriever{}
+        federated_identity.FederatedIdentityConfig(sess, &opts.AwsRoleArn, &tokenRetriever)
     } else {
         sess = session.Must(session.NewSessionWithOptions(session.Options{
         Config: getAwsConfig(opts),

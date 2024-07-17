@@ -24,6 +24,8 @@ import (
 	options "github.com/tempuslabs/s3s2/options"
 	utils "github.com/tempuslabs/s3s2/utils"
 	zip "github.com/tempuslabs/s3s2/zip"
+
+	federated_identity "github.com/tempuslabs/s3s2/federated_identity"
 )
 
 // shareCmd represents the share command
@@ -44,6 +46,7 @@ var shareCmd = &cobra.Command{
 		viper.BindPFlag("ssm-public-key", cmd.Flags().Lookup("ssm-public-key"))
 		viper.BindPFlag("is-gcs", cmd.Flags().Lookup("is-gcs"))
 		viper.BindPFlag("share-from-list", cmd.Flags().Lookup("share-from-list"))
+		viper.BindPFlag("aws-role-arn", cmd.Flags().Lookup("aws-role-arn"))
 		cmd.MarkFlagRequired("org")
 		cmd.MarkFlagRequired("region")
 	},
@@ -103,8 +106,16 @@ var shareCmd = &cobra.Command{
 
 		    log.Debugf("Processing chunk '%d'...", i_chunk)
 
+			// Check if a previous goroutine is running to refresh the session for
+			// federated identity. If so, stop it before starting a new one.
+			federated_identity.StopRefreshSession()
+
 		    // refresh session every chunk
 		    sess = utils.GetAwsSession(opts)
+			if opts.AwsRoleArn != "" {
+				// Start a new goroutine to refresh the session
+				federated_identity.StartRefreshSession(sess, &opts.AwsRoleArn)
+			}
 
             // tie off this current s3 directory allowing us to decrypt in batches of this size
             // this is used to create digestable folders for decrypt
@@ -293,6 +304,7 @@ func buildShareOptions(cmd *cobra.Command) options.Options {
 	parallelism := viper.GetInt("parallelism")
 	chunkSize := viper.GetInt("chunk-size")
 	batchSize := viper.GetInt("batch-size")
+	aws_role_arn := viper.GetString("aws-role-arn")
 
 	deleteOnCompletion := viper.GetBool("delete-on-completion")
 
@@ -323,6 +335,7 @@ func buildShareOptions(cmd *cobra.Command) options.Options {
 		LambdaTrigger      : lambdaTrigger,
 		DeleteOnCompletion : deleteOnCompletion,
 		ShareFromList      : shareFromList,
+		AwsRoleArn		   : aws_role_arn,
 	}
 
 	debug := viper.GetBool("debug")
@@ -391,6 +404,7 @@ func init() {
     shareCmd.PersistentFlags().String("metadata-files", "", "If provided, these files are the first to be uploaded and the last to be archived out of the input directory. Comma-separated. I.E. --metadata-files=file1,file2,file3")
     shareCmd.PersistentFlags().Bool("delete-on-completion", true, "If provided, provided directory will be deleted upon the upload of the files.")
     shareCmd.PersistentFlags().String("share-from-list", "", "Local path and filename for encrypting files directly from a CSV index.")
+	shareCmd.PersistentFlags().String("aws-role-arn", "", "AWS Role ARN to assume for the session.")
 
     // ssm key options
 	shareCmd.PersistentFlags().String("awskey", "", "The agreed upon S3 key to encrypt data with at the bucket.")
@@ -415,6 +429,7 @@ func init() {
 	viper.BindPFlag("aws-profile", shareCmd.PersistentFlags().Lookup("aws-profile"))
 	viper.BindPFlag("delete-on-completion", shareCmd.PersistentFlags().Lookup("delete-on-completion"))
     viper.BindPFlag("share-from-list", shareCmd.PersistentFlags().Lookup("share-from-list"))
+	viper.BindPFlag("aws-role-arn", shareCmd.PersistentFlags().Lookup("aws-role-arn"))
 
 	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetFormatter(&log.TextFormatter{})
