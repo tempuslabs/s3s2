@@ -111,6 +111,8 @@ func Decrypt(
 				// if block is for cases where AWS session expires, so we re-create session and attempt file again
 				// RefreshSession logic is not needed here since stale sessions are handled in the if block
 				err, skipped := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
+				// TODO: Remove after testing
+				log.Infof("Skipped value '%s'", skipped)
 				if err != nil || skipped {
 					sess = utils.GetAwsSession(opts)
 					err, skipped := decryptFile(sess, _pubKey, _privKey, m, fs, opts)
@@ -120,6 +122,7 @@ func Decrypt(
 						panic(err)
 					}
 					if skipped {
+						log.Infof("We are in the first skipped block")
 						f, err := os.OpenFile("skipped.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 						if err != nil {
 							log.Errorf("Error opening skipped.txt: %v", err)
@@ -132,6 +135,7 @@ func Decrypt(
 					}
 				}
 				if skipped {
+					log.Infof("We are in the second skipped block")
 					f, err := os.OpenFile("skipped.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					if err != nil {
 						log.Errorf("Error opening skipped.txt: %v", err)
