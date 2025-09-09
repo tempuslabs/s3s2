@@ -1,6 +1,6 @@
 module github.com/tempuslabs/s3s2
 
-go 1.23
+go 1.24.7
 
 require (
 	cloud.google.com/go/storage v1.41.0
